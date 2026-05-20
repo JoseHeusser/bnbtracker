@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Admin Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    input[type=checkbox] { accent-color: #16a34a; }
+  </style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+
+<!--
+  DECISIONES DE DISEÑO (09-admin.html):
+  - Solo visible para role=platform_admin
+  - Header distinto: sin breadcrumb de proyecto, logo + "Admin" badge
+  - Sidebar izquierdo (colapsable): Empresas / Usuarios / Kriterien-Definitionen / Pläne / Aktivitätslog
+  - Empresas: nombre, plan, proyectos activos, usuarios, creado, acciones
+  - Usuarios: nombre, email, empresa, rol, último login, acciones
+  - Modal nueva empresa: nombre + email del primer coordinador
+  - Modal crear usuario manualmente (sin invitación)
+  - Plan badges: Starter (gris) / Pro (azul) / Enterprise (violeta)
+  - Aktivitätslog: lista de eventos del sistema (últimas acciones)
+  - Next.js: app/[locale]/(dashboard)/admin/companies/page.tsx
+  - Solo platform_admin puede acceder (middleware redirect si rol !== platform_admin)
+-->
+
+<div x-data="adminApp()" class="flex flex-col h-screen">
+
+  <!-- ADMIN HEADER (different from project header) -->
+  <header class="h-12 bg-slate-900 flex items-center px-5 gap-4 shrink-0 z-20">
+    <div class="flex items-center gap-2.5">
+      <div class="w-7 h-7 rounded-lg bg-green-500 flex items-center justify-center">
+        <span class="text-white font-bold text-xs">BNB</span>
+      </div>
+      <span class="font-bold text-white text-sm">BNBtracker</span>
+      <span class="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-1">Admin</span>
+    </div>
+    <div class="ml-auto flex items-center gap-3">
+      <a href="02-dashboard.html" class="text-slate-400 hover:text-white text-xs flex items-center gap-1.5 transition-colors">
+        <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>Zur App
+      </a>
+      <div class="w-px h-4 bg-slate-700"></div>
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <div class="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-semibold">PA</div>
+        <span>Platform Admin</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- BODY: sidebar + main -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-48 bg-slate-800 flex flex-col shrink-0 overflow-y-auto">
+      <nav class="p-3 space-y-0.5 mt-1">
+        <template x-for="item in navItems" :key="item.id">
+          <button @click="activeSection=item.id"
+            class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors"
+            :class="activeSection===item.id ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'">
+            <i :data-lucide="item.icon" class="w-4 h-4 shrink-0"></i>
+            <span x-text="item.label"></span>
+            <template x-if="item.count">
+              <span class="ml-auto text-xs bg-slate-600 text-slate-300 px-1.5 py-0.5 rounded-full" x-text="item.count"></span>
+            </template>
+          </button>
+        </template>
+      </nav>
+      <!-- Platform stats footer -->
+      <div class="mt-auto p-4 border-t border-slate-700">
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between text-slate-400">
+            <span>Unternehmen</span><span class="text-white font-semibold">12</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Benutzer</span><span class="text-white font-semibold">48</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Projekte</span><span class="text-white font-semibold">31</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Version</span><span class="text-slate-500">v0.9.0</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 overflow-y-auto p-6">
+
+      <!-- ═══ COMPANIES ═══ -->
+      <div x-show="activeSection==='companies'">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h1 class="text-lg font-bold text-slate-900">Unternehmen</h1>
+            <p class="text-sm text-slate-500 mt-0.5">Alle registrierten Beratungsunternehmen</p>
+          </div>
+          <button @click="showNewCompanyModal=true"
+            class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+            <i data-lucide="plus" class="w-4 h-4"></i>Neues Unternehmen
+          </button>
+        </div>
+
+        <!-- Stats row -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <p class="text-xs text-slate-500 font-medium">Gesamt</p>
+            <p class="text-2xl font-black text-slate-900 mt-1">12</p>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <p class="text-xs text-slate-500 font-medium">Starter</p>
+            <p class="text-2xl font-black text-slate-500 mt-1">7</p>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <p class="text-xs text-blue-500 font-medium">Pro</p>
+            <p class="text-2xl font-black text-blue-600 mt-1">4</p>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <p class="text-xs text-violet-500 font-medium">Enterprise</p>
+            <p class="text-2xl font-black text-violet-600 mt-1">1</p>
+          </div>
+        </div>
+
+        <!-- Companies table -->
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 grid grid-cols-12 gap-3 text-xs font-semibold text-slate-500">
+            <span class="col-span-3">Unternehmen</span>
+            <span class="col-span-2">Plan</span>
+            <span class="col-span-2 text-center">Projekte</span>
+            <span class="col-span-2 text-center">Benutzer</span>
+            <span class="col-span-2">Erstellt</span>
+            <span class="col-span-1 text-right">Aktionen</span>
+          </div>
+          <template x-for="c in companies" :key="c.id">
+            <div class="px-5 py-4 border-b border-slate-100 hover:bg-slate-50 grid grid-cols-12 gap-3 items-center">
+              <div class="col-span-3 flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  :class="companyColor(c.slug)">
+                  <span x-text="c.name.slice(0,2).toUpperCase()"></span>
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-slate-900 truncate" x-text="c.name"></p>
+                  <p class="text-xs text-slate-400 truncate" x-text="c.slug+'.bnbtracker.de'"></p>
+                </div>
+              </div>
+              <div class="col-span-2">
+                <span class="text-xs font-bold px-2 py-1 rounded-full" :class="planBadge(c.plan)" x-text="c.plan"></span>
+              </div>
+              <div class="col-span-2 text-center">
+                <span class="text-sm font-semibold text-slate-800" x-text="c.projects"></span>
+                <span class="text-xs text-slate-400"> / <span x-text="planLimit(c.plan)"></span></span>
+              </div>
+              <div class="col-span-2 text-center">
+                <span class="text-sm font-semibold text-slate-800" x-text="c.users"></span>
+                <span class="text-xs text-slate-400"> / <span x-text="userLimit(c.plan)"></span></span>
+              </div>
+              <div class="col-span-2">
+                <p class="text-xs text-slate-500" x-text="c.created"></p>
+              </div>
+              <div class="col-span-1 flex items-center justify-end gap-1">
+                <button class="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                </button>
+                <button @click="impersonate(c)" class="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg" title="Impersonieren">
+                  <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- ═══ USERS ═══ -->
+      <div x-show="activeSection==='users'">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h1 class="text-lg font-bold text-slate-900">Alle Benutzer</h1>
+            <p class="text-sm text-slate-500 mt-0.5">48 registrierte Benutzer auf der Plattform</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input type="text" placeholder="Suchen…" class="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 w-40">
+            </div>
+            <select class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 bg-white focus:outline-none">
+              <option>Alle Rollen</option>
+              <option>Koordinator</option>
+              <option>Spezialist</option>
+              <option>Auftraggeber</option>
+            </select>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 grid grid-cols-12 gap-3 text-xs font-semibold text-slate-500">
+            <span class="col-span-3">Benutzer</span>
+            <span class="col-span-3">Unternehmen</span>
+            <span class="col-span-2">Rolle</span>
+            <span class="col-span-2">Letzter Login</span>
+            <span class="col-span-1 text-center">Projekte</span>
+            <span class="col-span-1 text-right">Aktionen</span>
+          </div>
+          <template x-for="u in users" :key="u.id">
+            <div class="px-5 py-3.5 border-b border-slate-100 hover:bg-slate-50 grid grid-cols-12 gap-3 items-center">
+              <div class="col-span-3 flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  :class="u.color">
+                  <span x-text="u.initials"></span>
+                </div>
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold text-slate-800 truncate" x-text="u.name"></p>
+                  <p class="text-xs text-slate-400 truncate" x-text="u.email"></p>
+                </div>
+              </div>
+              <div class="col-span-3">
+                <p class="text-xs text-slate-600 truncate" x-text="u.company"></p>
+              </div>
+              <div class="col-span-2">
+                <span class="text-xs px-2 py-0.5 rounded-full font-semibold" :class="roleBadge(u.role)" x-text="roleLabel(u.role)"></span>
+              </div>
+              <div class="col-span-2">
+                <p class="text-xs text-slate-500" x-text="u.lastLogin"></p>
+              </div>
+              <div class="col-span-1 text-center">
+                <span class="text-xs font-semibold text-slate-600" x-text="u.projectCount"></span>
+              </div>
+              <div class="col-span-1 flex items-center justify-end">
+                <button class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Deaktivieren">
+                  <i data-lucide="ban" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- ═══ CRITERIA DEFS ═══ -->
+      <div x-show="activeSection==='criteria'">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h1 class="text-lg font-bold text-slate-900">BNB-Kriteriendefinitionen</h1>
+            <p class="text-sm text-slate-500 mt-0.5">Globale Kriterienbasis — gilt für alle Unternehmen</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg font-medium">45 Kriterien · BNB Büro Neubau 2015</span>
+            <button class="flex items-center gap-1.5 text-xs border border-slate-200 bg-white px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-50">
+              <i data-lucide="upload" class="w-3.5 h-3.5"></i>Neue Version importieren
+            </button>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-center text-slate-400">
+          <i data-lucide="database" class="w-10 h-10 mx-auto mb-3 opacity-40"></i>
+          <p class="font-medium">BNB-Kriteriendefinitionen verwaltet via Supabase Seed</p>
+          <p class="text-sm mt-1">45 Kriterien BNB Büro Neubau 2015 sind geladen. Aktualisierungen via SQL-Migration.</p>
+          <a href="../db/seed_bnb_criteria.sql" class="inline-flex items-center gap-2 mt-4 text-sm text-green-600 hover:text-green-800 font-medium">
+            <i data-lucide="file-code" class="w-4 h-4"></i>seed_bnb_criteria.sql ansehen
+          </a>
+        </div>
+      </div>
+
+      <!-- ═══ ACTIVITY LOG ═══ -->
+      <div x-show="activeSection==='log'">
+        <div class="flex items-center justify-between mb-5">
+          <h1 class="text-lg font-bold text-slate-900">Aktivitätsprotokoll</h1>
+          <button class="text-xs border border-slate-200 bg-white px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>Exportieren
+          </button>
+        </div>
+        <div class="space-y-2">
+          <template x-for="event in activityLog" :key="event.id">
+            <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                :class="eventIconBg(event.type)">
+                <i :data-lucide="event.icon" class="w-4 h-4" :class="eventIconColor(event.type)"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-slate-800" x-html="event.message"></p>
+                <p class="text-xs text-slate-400 mt-0.5" x-text="event.company + ' · ' + event.timestamp"></p>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" :class="eventBadge(event.type)" x-text="event.type"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- NEW COMPANY MODAL -->
+  <div x-show="showNewCompanyModal" x-cloak
+    class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+    @click.self="showNewCompanyModal=false">
+    <div x-show="showNewCompanyModal" x-transition
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <h2 class="font-semibold text-slate-900 flex items-center gap-2">
+          <i data-lucide="building-2" class="w-5 h-5 text-green-600"></i>Neues Unternehmen
+        </h2>
+        <button @click="showNewCompanyModal=false" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Unternehmensname <span class="text-red-400">*</span></label>
+            <input type="text" placeholder="Nachhaltigkeitsberatung GmbH"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Slug <span class="text-red-400">*</span></label>
+            <input type="text" placeholder="nachhaltigkeits-gmbh"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 font-mono">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Plan</label>
+          <div class="grid grid-cols-3 gap-2">
+            <template x-for="p in plans" :key="p.value">
+              <label class="border rounded-xl p-3 cursor-pointer text-center transition-all"
+                :class="newCompany.plan===p.value ? 'border-green-400 bg-green-50' : 'border-slate-200 hover:bg-slate-50'">
+                <input type="radio" :value="p.value" x-model="newCompany.plan" class="sr-only">
+                <p class="text-xs font-bold" :class="newCompany.plan===p.value ? 'text-green-700' : 'text-slate-600'" x-text="p.label"></p>
+                <p class="text-xs text-slate-400 mt-0.5" x-text="p.desc"></p>
+              </label>
+            </template>
+          </div>
+        </div>
+        <div class="border-t border-slate-200 pt-4">
+          <p class="text-xs font-bold text-slate-500 mb-3">Erster Koordinator</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1.5">Name</label>
+              <input type="text" placeholder="Max Mustermann"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1.5">E-Mail</label>
+              <input type="email" placeholder="max@firma.de"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+        <button @click="showNewCompanyModal=false" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Abbrechen</button>
+        <button @click="showNewCompanyModal=false" class="px-4 py-2 text-sm bg-green-600 text-white rounded-xl hover:bg-green-700 font-semibold flex items-center gap-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>Erstellen + Einladen
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Mockup nav -->
+<div class="fixed bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full shadow-md px-5 py-1.5 flex items-center gap-3 z-50 text-xs">
+  <a href="08-members.html" class="text-slate-400 hover:text-slate-700">← Mitglieder</a>
+  <span class="text-slate-200">|</span>
+  <span class="text-slate-400 font-semibold">09 Admin</span>
+  <span class="text-slate-200">|</span>
+  <a href="00-design-system.html" class="text-slate-400 hover:text-slate-700">Design System ↺</a>
+</div>
+
+<script>
+function adminApp() {
+  return {
+    activeSection: 'companies',
+    showNewCompanyModal: false,
+    newCompany: { plan: 'starter' },
+
+    navItems: [
+      { id:'companies', label:'Unternehmen', icon:'building-2', count:'12' },
+      { id:'users',     label:'Benutzer',    icon:'users',      count:'48' },
+      { id:'criteria',  label:'Kriterien',   icon:'database',   count:null },
+      { id:'log',       label:'Aktivitäten', icon:'activity',   count:null },
+    ],
+
+    companies: [
+      { id:1, name:'BNB Consult GmbH',          slug:'bnb-consult',    plan:'Enterprise', projects:12, users:18, created:'Jan 2025' },
+      { id:2, name:'GreenBuild Berlin',          slug:'greenbuild',     plan:'Pro',        projects:5,  users:8,  created:'Feb 2025' },
+      { id:3, name:'Nachhaltigkeitsberatung AG', slug:'nb-ag',          plan:'Pro',        projects:4,  users:7,  created:'Mär 2025' },
+      { id:4, name:'EcoArchitekten',             slug:'eco-arch',       plan:'Starter',    projects:2,  users:4,  created:'Apr 2025' },
+      { id:5, name:'Planungsbüro Müller',        slug:'pb-mueller',     plan:'Starter',    projects:1,  users:3,  created:'Mai 2025' },
+    ],
+
+    users: [
+      { id:1, initials:'JM', name:'Julia Müller',  email:'j.mueller@bnb-consult.de', company:'BNB Consult GmbH',  role:'coordinator', lastLogin:'Heute',       projectCount:4,  color:'bg-green-600' },
+      { id:2, initials:'KL', name:'Klaus Lang',    email:'k.lang@bnb-consult.de',    company:'BNB Consult GmbH',  role:'coordinator', lastLogin:'Gestern',     projectCount:3,  color:'bg-blue-500' },
+      { id:3, initials:'AM', name:'Anna Müller',   email:'a.mueller@lca-studio.de',  company:'GreenBuild Berlin', role:'specialist',  lastLogin:'10. Mai 2026', projectCount:2,  color:'bg-violet-500' },
+      { id:4, initials:'SB', name:'Sarah Becker',  email:'s.becker@bundesbau.de',    company:'Auftraggeber ext.', role:'client',      lastLogin:'08. Mai 2026', projectCount:1,  color:'bg-teal-500' },
+      { id:5, initials:'RH', name:'Ralf Hoffmann', email:'r.hoffmann@bundesbau.de',  company:'Auftraggeber ext.', role:'specialist',  lastLogin:'—',           projectCount:0,  color:'bg-orange-400' },
+    ],
+
+    activityLog: [
+      { id:1, type:'Projekt',   icon:'folder-plus',   message:'<strong>Julia Müller</strong> hat ein neues Projekt erstellt: <em>Bundesministerium Berlin</em>',  company:'BNB Consult GmbH',  timestamp:'10. Mai 2026, 09:14' },
+      { id:2, type:'Benutzer',  icon:'user-plus',     message:'<strong>Klaus Lang</strong> hat <em>Anna Müller</em> zum Projekt eingeladen',                       company:'BNB Consult GmbH',  timestamp:'10. Mai 2026, 10:32' },
+      { id:3, type:'Dokument',  icon:'upload',        message:'<strong>Anna Müller</strong> hat <em>LCA-Berechnung_LP3_v2.pdf</em> hochgeladen',                   company:'BNB Consult GmbH',  timestamp:'12. Mai 2026, 14:22' },
+      { id:4, type:'Bericht',   icon:'file-text',     message:'<strong>Julia Müller</strong> hat den LP2-Bericht generiert',                                       company:'GreenBuild Berlin', timestamp:'13. Mai 2026, 08:55' },
+      { id:5, type:'Unternehmen',icon:'building-2',  message:'Neues Unternehmen <strong>EcoArchitekten</strong> wurde registriert (Starter Plan)',                  company:'EcoArchitekten',    timestamp:'14. Mai 2026, 11:00' },
+      { id:6, type:'Bewertung', icon:'clipboard-check',message:'<strong>Klaus Lang</strong> hat Kriterium <em>1.1.1</em> auf 65% bewertet',                        company:'BNB Consult GmbH',  timestamp:'14. Mai 2026, 15:45' },
+    ],
+
+    plans: [
+      { value:'starter',    label:'Starter',    desc:'3 Proj. · 5 User' },
+      { value:'pro',        label:'Pro',         desc:'15 Proj. · 20 User' },
+      { value:'enterprise', label:'Enterprise',  desc:'Unbegrenzt' },
+    ],
+
+    planBadge(p) {
+      return { Enterprise:'bg-violet-100 text-violet-700 border border-violet-200', Pro:'bg-blue-100 text-blue-700 border border-blue-200', Starter:'bg-slate-100 text-slate-600 border border-slate-200' }[p] || '';
+    },
+    planLimit(p) {
+      return { Enterprise:'∞', Pro:'15', Starter:'3' }[p];
+    },
+    userLimit(p) {
+      return { Enterprise:'∞', Pro:'20', Starter:'5' }[p];
+    },
+    roleBadge(r) {
+      return { coordinator:'bg-green-100 text-green-700', specialist:'bg-violet-100 text-violet-700', client:'bg-blue-100 text-blue-700' }[r];
+    },
+    roleLabel(r) {
+      return { coordinator:'Koordinator', specialist:'Spezialist', client:'Auftraggeber' }[r];
+    },
+    companyColor(slug) {
+      const colors = ['bg-green-600','bg-blue-600','bg-violet-600','bg-orange-500','bg-teal-600'];
+      let h=0; for(let c of slug) h=c.charCodeAt(0)+((h<<5)-h);
+      return colors[Math.abs(h)%colors.length];
+    },
+    impersonate(c) { alert('Impersonation: würde als Koordinator von "'+c.name+'" einloggen.'); },
+    eventIconBg(t) {
+      return { Projekt:'bg-green-100', Benutzer:'bg-violet-100', Dokument:'bg-blue-100', Bericht:'bg-red-50', Unternehmen:'bg-amber-100', Bewertung:'bg-teal-100' }[t] || 'bg-slate-100';
+    },
+    eventIconColor(t) {
+      return { Projekt:'text-green-600', Benutzer:'text-violet-600', Dokument:'text-blue-600', Bericht:'text-red-500', Unternehmen:'text-amber-600', Bewertung:'text-teal-600' }[t] || 'text-slate-500';
+    },
+    eventBadge(t) {
+      return { Projekt:'bg-green-100 text-green-700', Benutzer:'bg-violet-100 text-violet-700', Dokument:'bg-blue-100 text-blue-700', Bericht:'bg-red-100 text-red-600', Unternehmen:'bg-amber-100 text-amber-700', Bewertung:'bg-teal-100 text-teal-700' }[t] || 'bg-slate-100 text-slate-600';
+    },
+  };
+}
+
+document.addEventListener('alpine:initialized', () => lucide.createIcons());
+</script>
+</body>
+</html>

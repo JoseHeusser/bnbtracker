@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNB Kriterien — Mapeo completo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen" x-data="{
+  search: '',
+  activeArea: 0,
+  showDetail: null,
+  areas: [
+    { id:1, name:'Ökologische Qualität', name_es:'Calidad Ecológica', color:'green', weight_pct:'22.5%', bz_total:15 },
+    { id:2, name:'Ökonomische Qualität', name_es:'Calidad Económica', color:'blue', weight_pct:'22.5%', bz_total:7 },
+    { id:3, name:'Soziokulturelle und funktionale Qualität', name_es:'Calidad Sociocultural y Funcional', color:'violet', weight_pct:'22.5%', bz_total:18 },
+    { id:4, name:'Technische Qualität', name_es:'Calidad Técnica', color:'orange', weight_pct:'22.5%', bz_total:7 },
+    { id:5, name:'Prozessqualität', name_es:'Calidad de Proceso', color:'teal', weight_pct:'10%', bz_total:8 },
+    { id:6, name:'Standortmerkmale', name_es:'Características del Emplazamiento', color:'rose', weight_pct:'—', bz_total:0 }
+  ],
+  criteria: [
+    // ÁREA 1 — Ökologische Qualität
+    { code:'1.1.1', area:1, sub:'1.1', name_de:'Treibhauspotenzial (GWP)', name_es:'Potencial de calentamiento global', bz:3, lps:[3,5,8], mandatory:false,
+      desc_de:'LCA-Berechnung: Treibhausgasemissionen über den Lebenszyklus (Herstellung, Betrieb, Rückbau). Referenzgebäude-Methode nach DIN EN 15978.',
+      docs:['Ökobilanz-Bericht (LP3)','Nachweis Berechnungsgrundlagen','Aktualisierte LCA (LP8)'] },
+    { code:'1.1.2', area:1, sub:'1.1', name_de:'Ozonschichtabbaupotenzial (ODP)', name_es:'Potencial de destrucción del ozono', bz:1, lps:[3,5,8], mandatory:false,
+      desc_de:'Bewertung der Emissionen ozonabbauender Substanzen aus Bauprodukten und Kältemitteln.',
+      docs:['Ökobilanz-Bericht (enthält ODP)','Produktdatenblätter mit EPD'] },
+    { code:'1.1.3', area:1, sub:'1.1', name_de:'Ozonbildungspotenzial (POCP)', name_es:'Potencial de formación de ozono fotoquímico', bz:1, lps:[3,5,8], mandatory:false,
+      desc_de:'Bodennahe Ozonbildung (Sommersmog) durch VOC-Emissionen aus Bauprodukten.',
+      docs:['Ökobilanz-Bericht (enthält POCP)'] },
+    { code:'1.1.4', area:1, sub:'1.1', name_de:'Versauerungspotenzial (AP)', name_es:'Potencial de acidificación', bz:1, lps:[3,5,8], mandatory:false,
+      desc_de:'Beitrag zur Versauerung von Böden und Gewässern durch SO₂, NOₓ-Emissionen.',
+      docs:['Ökobilanz-Bericht (enthält AP)'] },
+    { code:'1.1.5', area:1, sub:'1.1', name_de:'Überdüngungspotenzial (EP)', name_es:'Potencial de eutrofización', bz:1, lps:[3,5,8], mandatory:false,
+      desc_de:'Beitrag zur Überdüngung aquatischer und terrestrischer Ökosysteme.',
+      docs:['Ökobilanz-Bericht (enthält EP)'] },
+    { code:'1.1.6', area:1, sub:'1.1', name_de:'Risiken für die lokale Umwelt', name_es:'Riesgos para el medio ambiente local', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Einsatz von Bauprodukten mit Risiken für Boden, Grundwasser oder Luft (Holzschutzmittel, Biozide, HBCD, etc.).',
+      docs:['Schadstoffgutachten','Produktnachweise (keine bedenklichen Stoffe)','Entsorgungskonzept'] },
+    { code:'1.1.7', area:1, sub:'1.1', name_de:'Nachhaltige Materialgewinnung / Holz', name_es:'Obtención sostenible de materiales / Madera', bz:1, lps:[3,5,8], mandatory:false,
+      desc_de:'Nachweis nachhaltiger Forstwirtschaft für alle eingesetzten Holzprodukte (FSC, PEFC oder gleichwertig).',
+      docs:['Zertifikate FSC/PEFC der Holzlieferanten','Mengenliste Holzprodukte','Baufirmen-Erklärungen'] },
+    { code:'1.2.1', area:1, sub:'1.2', name_de:'Primärenergiebedarf nicht erneuerbar (PEne)', name_es:'Demanda de energía primaria no renovable', bz:3, lps:[3,5,8], mandatory:false,
+      desc_de:'Gesamter nicht erneuerbarer Primärenergiebedarf: Betriebsenergie (EnEV/GEG-Berechnung) + graue Energie (LCA). Bezug: 1 m² NGF·a.',
+      docs:['Energienachweis GEG','Ökobilanz Primärenergie','Energiekonzept','Messkampagne (LP8)'] },
+    { code:'1.2.3', area:1, sub:'1.2', name_de:'Trinkwasserbedarf und Abwasseraufkommen', name_es:'Demanda de agua potable y generación de aguas residuales', bz:2, lps:[3,5,8], mandatory:false,
+      desc_de:'Maßnahmen zur Reduzierung des Trinkwasserbedarfs: wassersparende Armaturen, Regenwassernutzung, Grauwasserrecycling.',
+      docs:['Sanitärkonzept','Berechnungsnachweis Wasserbedarf','Regenwasseranlage-Planung','Zählerkonzept'] },
+    { code:'1.2.4', area:1, sub:'1.2', name_de:'Flächeninanspruchnahme', name_es:'Ocupación del suelo', bz:1, lps:[1,3], mandatory:false,
+      desc_de:'Bewertung der Versiegelung und ökologische Aufwertungsmaßnahmen (Dachbegrünung, Entsiegelung bestehender Flächen).',
+      docs:['Lageplan mit Versiegelungsberechnung','Freiflächenplan','Dachbegrünungsnachweis'] },
+
+    // ÁREA 2 — Ökonomische Qualität
+    { code:'2.1.1', area:2, sub:'2.1', name_de:'Gebäudebezogene Kosten im Lebenszyklus (LCC)', name_es:'Costos del edificio en el ciclo de vida (LCC)', bz:3, lps:[3,5,8], mandatory:false,
+      desc_de:'Berechnung der Gesamtkosten über den Lebenszyklus nach DIN 18960: Herstellungskosten KG 300+400, Betriebskosten, Reinigung, Instandhaltung, Erneuerung (50 Jahre). Vergleich mit Referenzgebäude.',
+      docs:['LCC-Berechnung (Kostenermittlung)','DIN 276 Kostenaufstellung','Wartungsverträge / Betriebskostenplan'] },
+    { code:'2.2.1', area:2, sub:'2.2', name_de:'Flächeneffizienz', name_es:'Eficiencia de superficies (NUF/BGF)', bz:2, lps:[3,5], mandatory:false,
+      desc_de:'Verhältnis Nutzungsfläche (NUF 1-6) zu Brutto-Grundfläche (BGF). Ziel: hoher Anteil nutzbarer Fläche, minimierte Verkehrs- und Konstruktionsflächen.',
+      docs:['Flächenberechnung nach DIN 277','Grundrisse mit Flächenzuordnung'] },
+    { code:'2.2.2', area:2, sub:'2.2', name_de:'Anpassungsfähigkeit', name_es:'Adaptabilidad (flexibilidad de uso a largo plazo)', bz:2, lps:[3,5], mandatory:false,
+      desc_de:'Fähigkeit des Gebäudes zur Umnutzung: Geometrie (Raumhöhen, Gebäudetiefe), Grundrisse (Nutzungseinheiten <400m²), Konstruktion (nicht tragende Innenwände), TGA (BUS-System, flexible Schächte).',
+      docs:['Bewertungsliste Umnutzungsfähigkeit','Grundrisse mit Nutzungseinheiten','Technisches Konzept TGA-Flexibilität'] },
+
+    // ÁREA 3 — Soziokulturelle Qualität
+    { code:'3.1.1', area:3, sub:'3.1', name_de:'Thermischer Komfort im Winter', name_es:'Confort térmico en invierno', bz:2, lps:[3,5,8], mandatory:false,
+      desc_de:'Operative Raumtemperatur, Strahlungsasymmetrie (kalte Flächen), Fußbodentemperatur, Zugluft nach DIN EN 15251 Kategorie II.',
+      docs:['Thermische Simulation (Winter)','Nachweis operative Temperatur','Strahlungsasymmetrie-Berechnung'] },
+    { code:'3.1.3', area:3, sub:'3.1', name_de:'Innenraumlufthygiene', name_es:'Higiene del aire interior (CO₂, VOC, Formaldehyd)', bz:2, lps:[3,5,8], mandatory:false,
+      desc_de:'Lüftungskonzept mit ausreichendem Außenluftvolumenstrom, Schadstoffemissionen aus Baumaterialien (VOC, Formaldehyd nach AgBB), CO₂-Konzentration <1000 ppm.',
+      docs:['Lüftungskonzept TGA','Schadstoffnachweis Baustoffe (AgBB)','CO₂-Messung (LP8)','Prüfzeugnisse Boden/Kleber/Farben'] },
+    { code:'3.1.4', area:3, sub:'3.1', name_de:'Akustischer Komfort', name_es:'Confort acústico (ruido, reverberación)', bz:2, lps:[3,5,8], mandatory:false,
+      desc_de:'Schallschutz zwischen Nutzungseinheiten und gegen Außenlärm, Nachhallzeit in Büroräumen und Besprechungsräumen, haustechnische Geräusche.',
+      docs:['Akustisches Konzept','Raumakustik-Simulation','Schallschutzmessungen (LP8)','TGA-Schallpegelnachweis'] },
+    { code:'3.1.5', area:3, sub:'3.1', name_de:'Visueller Komfort', name_es:'Confort visual (luz natural, deslumbramiento)', bz:2, lps:[3,5], mandatory:false,
+      desc_de:'Tageslichtversorgung (Tageslichtquotient ≥2% für 60% der Fläche), Blendschutz, Sonnenschutz, Kunstlicht-Beleuchtungsstärke nach DIN EN 12464.',
+      docs:['Tageslicht-Simulation','Beleuchtungskonzept','Nachweis Sonnenschutzsystem','Lichtmessungen (wenn vorhanden)'] },
+    { code:'3.1.6', area:3, sub:'3.1', name_de:'Einflussnahmemöglichkeiten durch Nutzer', name_es:'Control individual del usuario (temperatura, luz, ventilación)', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Individuelle Steuerungsmöglichkeiten: Raumtemperatur, Lüftung (Fensterlüftung oder dezentrale Einheit), Beleuchtung, Sonnenschutz.',
+      docs:['Technisches Konzept Nutzersteuerung','Grundrisse mit Bedienungskonzept','Gebäudeautomationsplan'] },
+    { code:'3.1.7', area:3, sub:'3.1', name_de:'Aufenthaltsqualitäten im Außenbereich', name_es:'Calidad de espacios exteriores para usuarios', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Qualität von Terrassen, Pausenhöfen, Grünflächen: Begrünung, Sitzgelegenheiten, Witterungsschutz, Barrierefreiheit, Erreichbarkeit vom Arbeitsplatz.',
+      docs:['Freiflächenplan','Außenanlagen-Konzept','Foto-Dokumentation (LP8)'] },
+    { code:'3.1.8', area:3, sub:'3.1', name_de:'Sicherheit und Störfallrisiken', name_es:'Seguridad y riesgos de accidentes', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Einbruchschutz (Widerstandsklassen DIN EN 1627), Absturzsicherung, Sicherheitsbeleuchtung, Maßnahmen gegen Störfallrisiken.',
+      docs:['Sicherheitskonzept','Nachweise Widerstandsklassen','Sicherheitsbeleuchtungsplan'] },
+    { code:'3.2.1', area:3, sub:'3.2', name_de:'Barrierefreiheit', name_es:'Accesibilidad libre de barreras (DIN 18040)', bz:2, lps:[3,5], mandatory:false,
+      desc_de:'Stufenlose Erreichbarkeit aller Bereiche, rollstuhlgerechte Ausstattung (Sanitär, Aufzüge), taktile Leitsysteme, DIN 18040-1.',
+      docs:['Barrierefreiheits-Nachweis','Grundrisse mit Barrierefreiheits-Check','Begehungsprotokoll (LP8)'] },
+    { code:'3.2.4', area:3, sub:'3.2', name_de:'Zugänglichkeit', name_es:'Accesibilidad general del edificio', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Allgemeine Erreichbarkeit und Orientierung: Eingangszone, Beschilderung, Leitsysteme, Adressbildung, öffentliche Zugänglichkeit.',
+      docs:['Orientierungs- und Leitsystemkonzept','Grundriss Eingangsbereich'] },
+    { code:'3.2.5', area:3, sub:'3.2', name_de:'Mobilitätsinfrastruktur', name_es:'Infraestructura de movilidad sostenible', bz:1, lps:[1,3], mandatory:false,
+      desc_de:'Fahrradabstellanlagen (überdacht, abschließbar, Anzahl), Ladestationen E-Mobilität (PKW + Fahrrad), Carsharing, ÖPNV-Anbindung.',
+      docs:['Fahrradkonzept (Anzahl, Ausstattung)','E-Mobilität-Konzept','ÖPNV-Erreichbarkeitsanalyse'] },
+    { code:'3.3.1', area:3, sub:'3.3', name_de:'Gestalterische und städtebauliche Qualität', name_es:'Calidad arquitectónica y urbanística', bz:2, lps:[3,5], mandatory:false,
+      desc_de:'Sicherung der Gestaltungsqualität durch Wettbewerbsverfahren (RPW 2013), Qualitätssicherungsmaßnahmen, Einbindung in städtebaulichen Kontext.',
+      docs:['Nachweis Wettbewerbsverfahren','Preisgerichtsprotokoll','Städtebauliche Einbindung (Lageplan)'] },
+    { code:'3.3.2', area:3, sub:'3.3', name_de:'Kunst am Bau', name_es:'Arte en la construcción (Kunst am Bau)', bz:1, lps:[5,8], mandatory:false,
+      desc_de:'Einbindung von Kunstwerken in Bundesbauten: Wettbewerb nach RRB, Budget (1-2% der Bausumme), Integration in Architektur.',
+      docs:['Wettbewerbsausschreibung Kunst','Preisgerichtsprotokoll','Ausführungsdokumentation Kunstwerk'] },
+
+    // ÁREA 4 — Technische Qualität
+    { code:'4.1.1', area:4, sub:'4.1', name_de:'Schallschutz', name_es:'Aislamiento acústico (entre unidades y exterior)', bz:2, lps:[3,5,8], mandatory:false,
+      desc_de:'Luft- und Trittschallschutz zwischen Nutzungseinheiten und gegen Außenlärm nach DIN 4109, erhöhter Schallschutz nach VDI 4100.',
+      docs:['Schallschutznachweis DIN 4109','Schalltechnisches Gutachten','Schallschutzmessungen (LP8)'] },
+    { code:'4.1.2', area:4, sub:'4.1', name_de:'Wärme- und Tauwasserschutz', name_es:'Aislamiento térmico y protección contra condensación', bz:1, lps:[3,5,8], mandatory:false,
+      desc_de:'Winterlicher Wärmeschutz (U-Werte, Wärmebrücken), sommerlicher Wärmeschutz (Sonneneintragskennwert), Tauwasserfreiheit nach DIN 4108.',
+      docs:['Wärmebrückennachweis','Tauwasserberechnung','Sommerlicher Wärmeschutznachweis'] },
+    { code:'4.1.3', area:4, sub:'4.1', name_de:'Reinigung und Instandhaltungsfreundlichkeit', name_es:'Facilidad de limpieza y mantenimiento', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Reinigungsfreundlichkeit von Fassaden (Zugang, Materialwahl), Böden, Sanitäranlagen, Fenstern. Zugänglichkeit für Wartungsarbeiten.',
+      docs:['Reinigungs- und Wartungskonzept','Fassadenzugang-Nachweis','Materialnachweis (pflegeleicht)'] },
+    { code:'4.1.4', area:4, sub:'4.1', name_de:'Rückbau, Trennung und Verwertung', name_es:'Deconstrucción, separación y reciclaje', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Lösbare Verbindungen, Trennbarkeit von Materialien, Verzicht auf Verbundstoffe, Recyclingfähigkeit der Hauptbaustoffe, Rückbaukonzept.',
+      docs:['Rückbaukonzept','Materialpass (Bauteilsteckbriefe)','Nachweis lösbare Verbindungen'] },
+    { code:'4.1.5', area:4, sub:'4.1', name_de:'Widerstandsfähigkeit gegen Naturgefahren', name_es:'Resistencia ante peligros naturales (inundación, viento, sismo)', bz:1, lps:[1,3], mandatory:false,
+      desc_de:'Standortbezogene Analyse der Naturgefahren (Hochwasser, Wind, Schnee, Erdbeben) und bauliche Schutzmaßnahmen.',
+      docs:['Naturgefahren-Analyse (Standort)','Statischer Nachweis Windlasten/Schnee','Hochwasserschutzkonzept (falls relevant)'] },
+    { code:'4.1.6', area:4, sub:'4.1', name_de:'Bedienungs- und Instandhaltungsfreundlichkeit der TGA', name_es:'Facilidad de operación y mantenimiento de instalaciones (TGA)', bz:1, lps:[3,5,8], mandatory:false,
+      desc_de:'Strukturierte Beschriftung aller TGA-Komponenten, Betriebshandbuch, CAFM-System, Gebäudeautomation mit Monitoring, Zugänglichkeit Wartungsschächte.',
+      docs:['TGA-Betriebshandbuch (Entwurf)','CAFM-Konzept','Gebäudeautomationsplan','Wartungsplan'] },
+
+    // ÁREA 5 — Prozessqualität
+    { code:'5.1.1', area:5, sub:'5.1', name_de:'Projektvorbereitung', name_es:'Preparación del proyecto (bedarfsplanung)', bz:1, lps:[1,2], mandatory:false,
+      desc_de:'Qualität der Bedarfsplanung nach DIN 18205: Nutzeranforderungen, Raumprogramm, Nachhaltigkeitsziele, Projekthandbuch, frühzeitige Einbindung Nutzer.',
+      docs:['Bedarfsplanung DIN 18205','Projekthandbuch','Nutzeranforderungsliste','Nachhaltigkeitsziele-Dokument'] },
+    { code:'5.1.2', area:5, sub:'5.1', name_de:'Integrale Planung', name_es:'Planificación integral (diseño integrado)', bz:1, lps:[1,2,3], mandatory:false,
+      desc_de:'Interdisziplinäre Zusammenarbeit aller Fachplaner von Beginn an, Koordinationsrunden, gemeinsame Simulationen, BIM-Einsatz.',
+      docs:['Planungsprotokoll Koordinationsrunden','BIM-Konzept (falls vorhanden)','Workshopprotokolle'] },
+    { code:'5.1.3', area:5, sub:'5.1', name_de:'Komplexität und Optimierung der Planung', name_es:'Optimización del diseño (simulaciones, variantes)', bz:1, lps:[3,5], mandatory:false,
+      desc_de:'Variantenuntersuchungen, Simulationen (Energie, Tageslicht, Raumakustik, CFD), Optimierungsschleifen, Nachhaltigkeitszertifizierung als Planungsziel.',
+      docs:['Variantenvergleich','Simulationsberichte (Energie, Licht, Akustik)','Optimierungsdokumentation'] },
+    { code:'5.1.4', area:5, sub:'5.1', name_de:'Ausschreibung und Vergabe', name_es:'Licitación y adjudicación con criterios de sostenibilidad', bz:1, lps:[6,7], mandatory:false,
+      desc_de:'Berücksichtigung von Nachhaltigkeitskriterien in Ausschreibungsunterlagen: ökologische Produktanforderungen, soziale Kriterien, lebenszyklusorientierte Vergabe.',
+      docs:['Ausschreibungsunterlagen (mit Nachhaltigkeitskriterien)','Vergabeprotokoll','Bieterauswahl-Dokumentation'] },
+    { code:'5.1.5', area:5, sub:'5.1', name_de:'Voraussetzungen für optimale Bewirtschaftung', name_es:'Condiciones para la gestión operativa óptima', bz:1, lps:[5,8], mandatory:false,
+      desc_de:'Maßnahmen für optimalen Gebäudebetrieb: Betriebshandbuch, Nutzerhandbuch, Schulungskonzept, Energiemonitoring, Messkonzept.',
+      docs:['Betriebshandbuch (Entwurf LP5, final LP8)','Nutzerhandbuch','Schulungsplan','Monitoringkonzept'] },
+    { code:'5.2.1', area:5, sub:'5.2', name_de:'Baustelle / Bauprozess', name_es:'Gestión sostenible de la obra', bz:1, lps:[7,8], mandatory:false,
+      desc_de:'Nachhaltiges Baustellenmanagement: Umweltschutzplan (Lärm, Staub, Abwasser), Abfallkonzept (Trennung, Recycling), Ressourceneffizienz, Arbeitssicherheit.',
+      docs:['Umweltschutzplan Baustelle','Abfallentsorgungskonzept','Arbeitssicherheitsplan','Baustellenprotokoll'] },
+    { code:'5.2.2', area:5, sub:'5.2', name_de:'Qualitätssicherung der Bauausführung', name_es:'Control de calidad de la ejecución de obra', bz:1, lps:[8], mandatory:false,
+      desc_de:'Qualitätsprüfungen während der Bauausführung: Kontrolle der Ausführung gemäß Planung, Dokumentation von Abweichungen und Mängelbeseitigung, Abnahmen.',
+      docs:['Qualitätssicherungsplan','Prüfprotokolle','Mängeldokumentation','Abnahmeprotokoll'] },
+    { code:'5.2.3', area:5, sub:'5.2', name_de:'Systematische Inbetriebnahme', name_es:'Puesta en marcha sistemática (commissioning)', bz:1, lps:[8], mandatory:false,
+      desc_de:'Funktionale Prüfung aller Gebäudesysteme vor Übergabe: Regelungsoptimierung, Messkampagnen, Dokumentation der Inbetriebnahme, Übergabeprotokoll.',
+      docs:['Inbetriebnahmeprotokoll','Einstellungsprotokolle TGA','Messkampagnen-Auswertung','Übergabedokumentation'] },
+
+    // ÁREA 6 — Standortmerkmale (informativo)
+    { code:'6.1.1', area:6, sub:'6.1', name_de:'Risiken am Mikrostandort', name_es:'Riesgos en el microemplazamiento (contaminación, ruido)', bz:0, lps:[1], mandatory:false,
+      desc_de:'Altlasten, Hochwassergefährdung (HWGK), Lärm (Lärmkartierung), Luftbelastung (NO₂, PM10), elektromagnetische Felder, Radon.',
+      docs:['Altlastenauskunft','Lärmkartierung','Luftqualitäts-Messung','HWGK-Karte'] },
+    { code:'6.1.2', area:6, sub:'6.1', name_de:'Verhältnisse am Mikrostandort', name_es:'Condiciones naturales del emplazamiento (sol, viento)', bz:0, lps:[1], mandatory:false,
+      desc_de:'Natürliche Verhältnisse: Besonnung (Verschattungsanalyse), Windverhältnisse, Bodenverhältnisse (Tragfähigkeit, Grundwasser).',
+      docs:['Besonnungsanalyse','Windgutachten (falls erforderlich)','Baugrundgutachten'] },
+    { code:'6.1.3', area:6, sub:'6.1', name_de:'Quartiersmerkmale', name_es:'Características del barrio (mezcla de usos, espacio público)', bz:0, lps:[1], mandatory:false,
+      desc_de:'Nutzungsmischung im Quartier, öffentliche Räume, soziale Infrastruktur, Grünversorgung, Stadtklima.',
+      docs:['Stadtplan mit Nutzungsanalyse','Grünflächennachweis','Sozialraumanalyse'] },
+    { code:'6.1.4', area:6, sub:'6.1', name_de:'Verkehrsanbindung', name_es:'Conectividad con transporte público (ÖPNV)', bz:0, lps:[1], mandatory:false,
+      desc_de:'Entfernung zu ÖPNV-Haltestellen (Bus, U-Bahn, S-Bahn, Bahn), Taktfrequenz, Vernetzung verschiedener Verkehrsträger.',
+      docs:['ÖPNV-Erreichbarkeitsanalyse','Fahrplan-Dokumentation','Fußweganalyse zu Haltestellen'] },
+    { code:'6.1.5', area:6, sub:'6.1', name_de:'Nähe zu nutzungsrelevanten Einrichtungen', name_es:'Proximidad a servicios y equipamientos relevantes', bz:0, lps:[1], mandatory:false,
+      desc_de:'Entfernung zu: Gastronomie, Einzelhandel, Post/Bank, Sport/Fitness, Kinderbetreuung, Grünflächen (fußläufig erreichbar).',
+      docs:['Nahversorgungsanalyse (Radius 500m)','Karte mit Einrichtungen'] },
+    { code:'6.1.6', area:6, sub:'6.1', name_de:'Anliegende Medien / Erschließung', name_es:'Infraestructura de servicios (acometidas, energía)', bz:0, lps:[1], mandatory:false,
+      desc_de:'Verfügbarkeit: Fernwärme/-kälte (Anschlusskosten, CO₂-Faktor), Erdgas, Strom, Glasfaser. Potenzial für erneuerbare Energien am Standort.',
+      docs:['Medienanfrage Versorger','Fernwärme-Anschlusskarte','Netzkarte Strom'] },
+  ],
+  get filteredCriteria() {
+    let c = this.criteria;
+    if (this.activeArea > 0) c = c.filter(x => x.area === this.activeArea);
+    if (this.search) {
+      const s = this.search.toLowerCase();
+      c = c.filter(x =>
+        x.code.includes(s) || x.name_de.toLowerCase().includes(s) || x.name_es.toLowerCase().includes(s)
+      );
+    }
+    return c;
+  },
+  bzColor(bz) {
+    return ['bg-slate-100 text-slate-400','bg-slate-200 text-slate-600','bg-blue-100 text-blue-700','bg-green-100 text-green-700'][bz] || '';
+  },
+  areaColor(a) {
+    return ['','green','blue','violet','orange','teal','rose'][a];
+  },
+  areaBadge(a) {
+    const colors = ['','bg-green-100 text-green-700','bg-blue-100 text-blue-700','bg-violet-100 text-violet-700','bg-orange-100 text-orange-700','bg-teal-100 text-teal-700','bg-rose-100 text-rose-600'];
+    return colors[a];
+  }
+}">
+
+  <!-- HEADER -->
+  <div class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center gap-4">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+          <span class="text-white font-bold text-xs">BNB</span>
+        </div>
+        <span class="font-bold text-slate-900">BNB Büro Neubau v2015</span>
+        <span class="text-slate-400 text-sm">— Mapeo de Criterios</span>
+      </div>
+      <div class="ml-auto flex items-center gap-3">
+        <!-- Search -->
+        <div class="relative">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+          <input x-model="search" type="text" placeholder="Suche Kriterium..." class="pl-9 pr-4 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-56">
+        </div>
+        <span class="text-xs text-slate-400" x-text="filteredCriteria.length + ' / 45 Kriterien'"></span>
+      </div>
+    </div>
+
+    <!-- Area filter tabs -->
+    <div class="max-w-7xl mx-auto px-6 flex gap-1 pb-2 overflow-x-auto">
+      <button @click="activeArea=0" :class="activeArea===0 ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'"
+        class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1">
+        Alle (45)
+      </button>
+      <template x-for="a in areas" :key="a.id">
+        <button @click="activeArea = activeArea===a.id ? 0 : a.id"
+          :class="activeArea===a.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'"
+          class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+          <span x-text="'Ä' + a.id + ' — ' + a.name_es.split(' ').slice(0,2).join(' ')"></span>
+        </button>
+      </template>
+    </div>
+  </div>
+
+  <!-- AREA SUMMARY CARDS -->
+  <div class="max-w-7xl mx-auto px-6 py-4">
+    <div class="grid grid-cols-6 gap-3 mb-6">
+      <template x-for="a in areas" :key="a.id">
+        <div @click="activeArea = activeArea===a.id ? 0 : a.id" :class="activeArea===a.id ? 'ring-2 ring-slate-700' : ''"
+          class="bg-white rounded-xl border border-slate-200 p-3 cursor-pointer hover:shadow-sm transition-all">
+          <div class="w-6 h-6 rounded-full mb-2"
+            :class="{'bg-green-500':a.color==='green','bg-blue-500':a.color==='blue','bg-violet-500':a.color==='violet','bg-orange-400':a.color==='orange','bg-teal-500':a.color==='teal','bg-rose-500':a.color==='rose'}">
+          </div>
+          <p class="text-xs font-bold text-slate-800" x-text="'Ä' + a.id"></p>
+          <p class="text-xs text-slate-500 leading-tight mt-0.5" x-text="a.name_es" style="font-size:10px"></p>
+          <div class="mt-2 flex items-center justify-between">
+            <span class="text-xs text-slate-400" x-text="a.weight_pct"></span>
+            <span class="text-xs font-semibold text-slate-600" x-text="a.bz_total > 0 ? 'BZ=' + a.bz_total : '—'"></span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- CRITERIA TABLE -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200">
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide w-20">Código</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nombre (DE)</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nombre (ES)</th>
+            <th class="text-center px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide w-16">BZ</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide w-40">LP Evaluación</th>
+            <th class="text-center px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide w-16">Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="c in filteredCriteria" :key="c.code">
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <!-- Código -->
+              <td class="px-4 py-3">
+                <span class="font-mono font-bold text-sm"
+                  :class="areaBadge(c.area)"
+                  style="padding:2px 8px; border-radius:6px;" x-text="c.code"></span>
+              </td>
+              <!-- Nombre DE -->
+              <td class="px-4 py-3">
+                <p class="font-medium text-slate-800 text-sm" x-text="c.name_de"></p>
+                <p class="text-xs text-slate-400 mt-0.5 truncate max-w-xs" x-text="c.desc_de" x-show="!showDetail || showDetail !== c.code"></p>
+              </td>
+              <!-- Nombre ES -->
+              <td class="px-4 py-3">
+                <p class="text-slate-600 text-sm" x-text="c.name_es"></p>
+              </td>
+              <!-- BZ -->
+              <td class="px-3 py-3 text-center">
+                <span class="inline-block w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center"
+                  :class="bzColor(c.bz)" x-text="c.bz === 0 ? '—' : c.bz"></span>
+              </td>
+              <!-- LPs -->
+              <td class="px-4 py-3">
+                <div class="flex gap-1 flex-wrap">
+                  <template x-for="lp in c.lps" :key="lp">
+                    <span class="px-1.5 py-0.5 rounded text-xs font-bold"
+                      :class="[3,5,8].includes(lp) ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'"
+                      x-text="'LP' + lp"></span>
+                  </template>
+                </div>
+              </td>
+              <!-- Detalle toggle -->
+              <td class="px-3 py-3 text-center">
+                <button @click="showDetail = showDetail===c.code ? null : c.code"
+                  class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                  <i :data-lucide="showDetail===c.code ? 'chevron-up' : 'chevron-down'" class="w-4 h-4"></i>
+                </button>
+              </td>
+            </tr>
+
+            <!-- Expandible detail row -->
+            <tr x-show="showDetail === c.code" x-cloak class="bg-slate-50 border-b border-slate-200">
+              <td></td>
+              <td colspan="5" class="px-4 py-4">
+                <div class="grid grid-cols-2 gap-6">
+                  <div>
+                    <p class="text-xs font-semibold text-slate-500 mb-1.5">Beschreibung</p>
+                    <p class="text-sm text-slate-700 leading-relaxed" x-text="c.desc_de"></p>
+                  </div>
+                  <div>
+                    <p class="text-xs font-semibold text-slate-500 mb-1.5">Nachweise erforderlich</p>
+                    <ul class="space-y-1">
+                      <template x-for="doc in c.docs" :key="doc">
+                        <li class="flex items-start gap-1.5 text-xs text-slate-600">
+                          <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0"></i>
+                          <span x-text="doc"></span>
+                        </li>
+                      </template>
+                    </ul>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <!-- Empty state -->
+      <div x-show="filteredCriteria.length === 0" class="py-12 text-center text-slate-400">
+        <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+        <p>Keine Kriterien gefunden</p>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="mt-4 flex flex-wrap gap-6 text-xs text-slate-500">
+      <div class="flex items-center gap-2">
+        <span class="font-bold">BZ</span> = Bedeutungszahl (peso relativo dentro del área: 1=bajo, 2=medio, 3=alto)
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="px-1.5 py-0.5 rounded text-xs font-bold bg-blue-600 text-white">LP3</span>
+        = LP principal de evaluación BNB
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="px-1.5 py-0.5 rounded text-xs font-bold bg-slate-200 text-slate-600">LP1</span>
+        = LP secundaria o inicial
+      </div>
+      <div>Área 6: informativa (no entra en puntaje total)</div>
+    </div>
+
+    <!-- Nav -->
+    <div class="mt-6 flex gap-3">
+      <a href="00-design-system.html" class="text-xs text-slate-500 hover:text-slate-800 underline">← Design System</a>
+      <a href="04-criteria-matrix.html" class="text-xs text-green-600 hover:text-green-800 underline font-medium">→ Kriterienmatrix (vista proyecto)</a>
+    </div>
+  </div>
+
+  <script>lucide.createIcons(); document.addEventListener('alpine:init', () => {})</script>
+  <script>
+    // Re-init Lucide after Alpine renders dynamic icons
+    document.addEventListener('alpine:initialized', () => {
+      setTimeout(() => lucide.createIcons(), 100);
+    });
+    document.addEventListener('click', () => setTimeout(() => lucide.createIcons(), 50));
+  </script>
+</body>
+</html>

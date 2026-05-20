@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style> body { font-family: 'Inter', sans-serif; } </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center">
+
+  <!--
+    DECISIONES DE DISEÑO (01-login.html):
+    - Layout: centrado con fondo slate-100, tarjeta blanca
+    - Tabs: Login / Registrar empresa nueva
+    - Login: email + password + magic link option
+    - Registro: nombre empresa + email + password (crea company + primer coordinator)
+    - Logo: BNB verde con texto BNBtracker
+    - Next.js: app/[locale]/(auth)/login/page.tsx
+    - Supabase Auth: signInWithPassword + signInWithOtp (magic link)
+    - Al registrar: INSERT companies + INSERT profiles (role=coordinator)
+  -->
+
+  <div x-data="{ tab: 'login', loading: false, showMagicLink: false }" class="w-full max-w-md px-4">
+
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center shadow-md">
+          <span class="text-white font-bold text-sm">BNB</span>
+        </div>
+        <div class="text-left">
+          <p class="font-bold text-slate-900 text-xl leading-tight">BNBtracker</p>
+          <p class="text-xs text-slate-500 leading-tight">Nachhaltigkeitszertifizierung</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+
+      <!-- Tabs -->
+      <div class="flex border-b border-slate-200">
+        <button @click="tab='login'"
+          :class="tab==='login' ? 'border-b-2 border-green-600 text-green-700 font-semibold' : 'text-slate-500 hover:text-slate-700'"
+          class="flex-1 py-3.5 text-sm transition-colors">
+          Anmelden
+        </button>
+        <button @click="tab='register'"
+          :class="tab==='register' ? 'border-b-2 border-green-600 text-green-700 font-semibold' : 'text-slate-500 hover:text-slate-700'"
+          class="flex-1 py-3.5 text-sm transition-colors">
+          Firma registrieren
+        </button>
+      </div>
+
+      <div class="p-7">
+
+        <!-- LOGIN FORM -->
+        <div x-show="tab==='login'" x-transition>
+          <h2 class="text-lg font-semibold text-slate-900 mb-5">Willkommen zurück</h2>
+
+          <div x-show="!showMagicLink" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">E-Mail</label>
+              <input type="email" placeholder="koordinator@firma.de"
+                class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            <div>
+              <div class="flex justify-between mb-1.5">
+                <label class="block text-sm font-medium text-slate-700">Passwort</label>
+                <a href="#" class="text-xs text-green-600 hover:underline">Passwort vergessen?</a>
+              </div>
+              <input type="password" placeholder="••••••••"
+                class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            <button @click="loading=true; setTimeout(()=>{ window.location='02-dashboard.html' }, 800)"
+              class="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
+              <span x-show="!loading">Anmelden</span>
+              <span x-show="loading" class="flex items-center gap-2">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                Anmelden...
+              </span>
+            </button>
+
+            <div class="relative my-4">
+              <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-slate-200"></div>
+              </div>
+              <div class="relative flex justify-center text-xs text-slate-400">
+                <span class="bg-white px-2">oder</span>
+              </div>
+            </div>
+
+            <button @click="showMagicLink=true"
+              class="w-full border border-slate-300 text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 flex items-center justify-center gap-2">
+              <i data-lucide="mail" class="w-4 h-4"></i>
+              Magic Link senden
+            </button>
+          </div>
+
+          <!-- Magic Link Form -->
+          <div x-show="showMagicLink" x-transition class="space-y-4">
+            <div class="flex items-center gap-2 mb-4">
+              <button @click="showMagicLink=false" class="text-slate-400 hover:text-slate-600">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+              </button>
+              <p class="text-sm font-medium text-slate-700">Magic Link anfordern</p>
+            </div>
+            <p class="text-sm text-slate-500">Wir senden Ihnen einen Link zum einmaligen Anmelden.</p>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">E-Mail</label>
+              <input type="email" placeholder="koordinator@firma.de"
+                class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <button class="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700">
+              Link senden
+            </button>
+          </div>
+        </div>
+
+        <!-- REGISTER FORM -->
+        <div x-show="tab==='register'" x-transition>
+          <h2 class="text-lg font-semibold text-slate-900 mb-1">Neue Firma</h2>
+          <p class="text-sm text-slate-500 mb-5">Erstellen Sie ein Konto für Ihr Beratungsunternehmen.</p>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">Unternehmensname</label>
+              <input type="text" placeholder="z.B. Nachhaltigkeitsberatung GmbH"
+                class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">Ihr Name (BNB-Koordinator)</label>
+              <input type="text" placeholder="Max Mustermann"
+                class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">E-Mail</label>
+              <input type="email" placeholder="max@firma.de"
+                class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">Passwort</label>
+              <input type="password" placeholder="Mindestens 8 Zeichen"
+                class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+
+            <div class="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-700">
+              <strong>Starter Plan:</strong> Bis zu 3 Projekte, 5 Benutzer, BNB Büro Neubau
+            </div>
+
+            <button @click="loading=true; setTimeout(()=>{ window.location='02-dashboard.html' }, 800)"
+              class="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700 flex items-center justify-center gap-2">
+              <span x-show="!loading">Unternehmen erstellen</span>
+              <span x-show="loading">Wird erstellt...</span>
+            </button>
+
+            <p class="text-xs text-slate-400 text-center">
+              Mit der Registrierung akzeptieren Sie unsere
+              <a href="#" class="underline hover:text-slate-600">Nutzungsbedingungen</a>
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Mockup nav -->
+    <div class="mt-6 flex justify-center gap-3">
+      <a href="00-design-system.html" class="text-xs text-slate-400 hover:text-slate-600">← Design System</a>
+      <span class="text-slate-300">|</span>
+      <a href="02-dashboard.html" class="text-xs text-slate-400 hover:text-slate-600">Dashboard →</a>
+    </div>
+
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

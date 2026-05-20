@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNB Tracker — Interactive Design Mockups</title>
+  <meta name="description" content="Interactive design mockups for BNB Tracker — a sustainability scoring tool for the German federal BNB (Bewertungssystem Nachhaltiges Bauen) certification system.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+  <header class="max-w-5xl mx-auto px-6 pt-16 pb-10">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-200 text-amber-800 text-xs font-medium mb-6">
+      <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+      Phase 0 — Design mockups (app code in progress)
+    </div>
+    <h1 class="text-4xl font-bold tracking-tight text-slate-900">BNB Tracker</h1>
+    <p class="text-lg text-slate-600 mt-3 max-w-2xl">
+      A planned web application to track compliance with the
+      <strong>BNB (Bewertungssystem Nachhaltiges Bauen)</strong> — the German federal sustainability
+      certification system for public office buildings.
+    </p>
+    <p class="text-sm text-slate-500 mt-4 max-w-2xl">
+      Below are 13 interactive HTML mockups covering the full app flow:
+      authentication, project tracking, the 45-criterion matrix, scoring engine, reports, and admin.
+      The Supabase schema and full criteria extraction are in the
+      <a href="https://github.com/JoseHeusser/bnbtracker" class="text-blue-600 hover:underline">GitHub repository</a>.
+    </p>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6 pb-16 space-y-10">
+
+    <!-- Overview screens -->
+    <section>
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">Overview screens</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <a href="02-dashboard.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">02</div>
+          <div class="font-semibold text-slate-900 mt-1">Multi-Project Dashboard</div>
+          <p class="text-sm text-slate-500 mt-1">All certification projects at a glance</p>
+        </a>
+        <a href="03-project-overview.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">03</div>
+          <div class="font-semibold text-slate-900 mt-1">Project Overview</div>
+          <p class="text-sm text-slate-500 mt-1">Single project summary &amp; status</p>
+        </a>
+        <a href="06-gantt.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">06</div>
+          <div class="font-semibold text-slate-900 mt-1">Phase Gantt</div>
+          <p class="text-sm text-slate-500 mt-1">Compliance work across BNB phases</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- Criteria workflow -->
+    <section>
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">Criteria workflow</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <a href="04-criteria-matrix.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">04</div>
+          <div class="font-semibold text-slate-900 mt-1">Criteria × Phases Matrix</div>
+          <p class="text-sm text-slate-500 mt-1">All 45 BNB criteria across LP1–LP5</p>
+        </a>
+        <a href="05-criterion-detail.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">05</div>
+          <div class="font-semibold text-slate-900 mt-1">Criterion Detail</div>
+          <p class="text-sm text-slate-500 mt-1">Deep-dive with Z/R/G scoring &amp; PDF refs</p>
+        </a>
+        <a href="00b-criteria-map.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">00b</div>
+          <div class="font-semibold text-slate-900 mt-1">Criteria Map</div>
+          <p class="text-sm text-slate-500 mt-1">Reference index of all 45 criteria</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- Reports -->
+    <section>
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">Reports</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <a href="07-reports.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">07</div>
+          <div class="font-semibold text-slate-900 mt-1">Interactive Reports</div>
+          <p class="text-sm text-slate-500 mt-1">LP charts &amp; area breakdowns</p>
+        </a>
+        <a href="10-report-kurzbericht.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">10</div>
+          <div class="font-semibold text-slate-900 mt-1">Kurzbericht</div>
+          <p class="text-sm text-slate-500 mt-1">Short certification report</p>
+        </a>
+        <a href="11-report-vollbericht.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">11</div>
+          <div class="font-semibold text-slate-900 mt-1">Vollbericht</div>
+          <p class="text-sm text-slate-500 mt-1">Full certification report</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- Admin & system -->
+    <section>
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">Admin &amp; system</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <a href="01-login.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">01</div>
+          <div class="font-semibold text-slate-900 mt-1">Login</div>
+          <p class="text-sm text-slate-500 mt-1">Authentication entry point</p>
+        </a>
+        <a href="08-members.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">08</div>
+          <div class="font-semibold text-slate-900 mt-1">Members</div>
+          <p class="text-sm text-slate-500 mt-1">Team &amp; role management</p>
+        </a>
+        <a href="09-admin.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">09</div>
+          <div class="font-semibold text-slate-900 mt-1">Admin</div>
+          <p class="text-sm text-slate-500 mt-1">System administration</p>
+        </a>
+        <a href="00-design-system.html" class="block p-4 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition">
+          <div class="text-xs text-slate-400 font-mono">00</div>
+          <div class="font-semibold text-slate-900 mt-1">Design System</div>
+          <p class="text-sm text-slate-500 mt-1">Design tokens &amp; components</p>
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="max-w-5xl mx-auto px-6 pb-12 text-sm text-slate-500 border-t border-slate-200 pt-6">
+    <p>
+      Built by <a href="https://github.com/JoseHeusser" class="text-blue-600 hover:underline">Jose Heusser</a> ·
+      <a href="https://oxidelabs.cl" class="text-blue-600 hover:underline">Oxidelabs</a> ·
+      <a href="https://github.com/JoseHeusser/bnbtracker" class="text-blue-600 hover:underline">Repository on GitHub</a>
+    </p>
+    <p class="mt-1">AI-assisted development with Claude Code + Cursor.</p>
+  </footer>
+
+</body>
+</html>

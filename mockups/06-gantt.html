@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Gantt LP Milestones</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    .gantt-bar { transition: width 0.3s ease; }
+  </style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+
+<!--
+  DECISIONES DE DISEÑO (06-gantt.html):
+  - Timeline: eje X = meses (ene 2025 → feb 2028), 37 meses totales
+  - Dos barras por LP: planned (azul claro) + actual (azul oscuro/verde si done)
+  - Marcador "Hoy" (10-05-2026) como línea vertical roja punteada
+  - Click en barra/fila → modal de edición de fechas + notas + estado
+  - Indicador de % criterios completados por LP (mini progress bar)
+  - Botón "Bericht generieren" en cada LP aprobada → llama FastAPI /reports/pdf
+  - Next.js: app/[locale]/(dashboard)/projects/[id]/gantt/page.tsx
+  - Datos: project_lp_milestones tabla — planned_date / actual_date / status / notes
+  - Server Component fetch milestones, Client Component para drag de fechas (fase 2)
+-->
+
+<div x-data="ganttApp()" class="flex flex-col h-screen">
+
+  <!-- HEADER -->
+  <header class="h-12 bg-white border-b border-slate-200 flex items-center px-5 gap-3 shrink-0 z-20">
+    <a href="02-dashboard.html" class="flex items-center gap-2 shrink-0">
+      <div class="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+        <span class="text-white font-bold text-xs">BNB</span>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">BNBtracker</span>
+    </a>
+    <span class="text-slate-300">/</span>
+    <a href="02-dashboard.html" class="text-slate-500 text-sm hover:text-slate-700">Projekte</a>
+    <span class="text-slate-300">/</span>
+    <a href="03-project-overview.html" class="text-slate-500 text-sm hover:text-slate-700 truncate max-w-36">Bundesministerium Berlin</a>
+    <span class="text-slate-300">/</span>
+    <span class="text-slate-700 text-sm font-medium">Gantt</span>
+    <span class="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold">LP 3 aktiv</span>
+    <div class="ml-auto flex items-center gap-3">
+      <button class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+        <i data-lucide="bell" class="w-4 h-4"></i>
+      </button>
+      <div class="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-semibold">JM</div>
+    </div>
+  </header>
+
+  <!-- PROJECT NAV TABS -->
+  <div class="bg-white border-b border-slate-200 px-4 flex items-center gap-0.5 shrink-0">
+    <a href="03-project-overview.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>Übersicht
+    </a>
+    <a href="04-criteria-matrix.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="table-2" class="w-3.5 h-3.5"></i>Kriterien
+    </a>
+    <a href="#" class="px-3 py-2.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 flex items-center gap-1.5">
+      <i data-lucide="gantt-chart" class="w-3.5 h-3.5"></i>Gantt
+    </a>
+    <a href="07-reports.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>Berichte
+    </a>
+    <a href="08-members.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="users" class="w-3.5 h-3.5"></i>Mitglieder
+    </a>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="bg-white border-b border-slate-200 px-5 py-2.5 flex items-center gap-3 shrink-0">
+    <div class="flex items-center gap-1.5 text-xs text-slate-500">
+      <span class="w-3 h-3 rounded bg-slate-200 inline-block border border-slate-300"></span> Geplant
+      <span class="w-3 h-3 rounded bg-blue-500 inline-block ml-2"></span> Wird bearbeitet
+      <span class="w-3 h-3 rounded bg-green-500 inline-block ml-2"></span> Abgeschlossen
+      <span class="w-3 h-3 rounded bg-red-400 inline-block ml-2"></span> Verzögert
+    </div>
+    <div class="ml-auto flex items-center gap-2">
+      <button class="flex items-center gap-1.5 text-xs text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+        <i data-lucide="calendar-range" class="w-3.5 h-3.5"></i>Zeitraum anpassen
+      </button>
+      <button class="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors font-semibold">
+        <i data-lucide="file-text" class="w-3.5 h-3.5"></i>LP3-Bericht generieren
+      </button>
+    </div>
+  </div>
+
+  <!-- GANTT CONTENT -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- LEFT TABLE (fixed) -->
+    <div class="w-80 border-r border-slate-200 bg-white flex flex-col shrink-0 overflow-hidden">
+      <!-- Header row -->
+      <div class="flex items-center px-4 py-2.5 bg-slate-100 border-b border-slate-200 text-xs font-semibold text-slate-500 shrink-0">
+        <span class="flex-1">Leistungsphase</span>
+        <span class="w-20 text-center">Kriterien</span>
+        <span class="w-14 text-center">Status</span>
+      </div>
+      <!-- LP rows -->
+      <div class="flex-1 overflow-y-auto">
+        <template x-for="lp in lps" :key="lp.n">
+          <div @click="openModal(lp)"
+            class="flex items-center px-4 py-3 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+            :class="lp.active ? 'bg-blue-50 hover:bg-blue-50' : ''">
+            <!-- LP circle -->
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 mr-3 shrink-0"
+              :class="lpCircleStyle(lp)">
+              <template x-if="lp.status === 'approved'">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </template>
+              <template x-if="lp.status !== 'approved'">
+                <span x-text="lp.n"></span>
+              </template>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-semibold text-slate-800 truncate" x-text="lp.name"></p>
+              <p class="text-xs text-slate-400 mt-0.5" x-text="formatDateRange(lp)"></p>
+            </div>
+            <!-- Criteria progress -->
+            <div class="w-20 px-2">
+              <div class="text-center mb-1">
+                <span class="text-xs font-semibold" :class="lp.criteriaColor" x-text="lp.criteriaReady+'/'+lp.criteriaTotal"></span>
+              </div>
+              <div class="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all"
+                  :class="lp.criteriaBarColor"
+                  :style="'width:'+Math.round(lp.criteriaReady/lp.criteriaTotal*100)+'%'"></div>
+              </div>
+            </div>
+            <!-- Status badge -->
+            <div class="w-14 flex justify-center">
+              <span class="text-xs px-1.5 py-0.5 rounded font-medium" :class="statusBadge(lp.status)" x-text="statusShort(lp.status)"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- RIGHT: Timeline (scrollable) -->
+    <div class="flex-1 overflow-x-auto overflow-y-auto">
+      <div style="min-width: 900px;">
+
+        <!-- Month headers -->
+        <div class="flex bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
+          <template x-for="(m, idx) in months" :key="idx">
+            <div class="border-r border-slate-200 text-center"
+              :style="'width:'+m.widthPct+'%;min-width:'+m.minPx+'px'"
+              :class="m.isCurrentMonth ? 'bg-blue-50' : ''">
+              <div class="py-1">
+                <p class="text-xs font-semibold text-slate-500" :class="m.isCurrentMonth ? 'text-blue-600' : ''" x-text="m.year" x-show="m.showYear"></p>
+                <p class="text-xs" :class="m.isCurrentMonth ? 'text-blue-700 font-bold' : 'text-slate-400'" x-text="m.label"></p>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Quarter row -->
+        <div class="flex bg-white border-b border-slate-100 sticky top-9 z-10">
+          <template x-for="(q, idx) in quarters" :key="idx">
+            <div class="border-r border-slate-100 py-1 text-center"
+              :style="'width:'+q.widthPct+'%'">
+              <p class="text-xs text-slate-300 font-medium" x-text="q.label"></p>
+            </div>
+          </template>
+        </div>
+
+        <!-- Gantt bars rows -->
+        <div class="relative">
+          <!-- Today vertical line -->
+          <div class="absolute top-0 bottom-0 w-px bg-red-400 opacity-70 z-20 pointer-events-none"
+            :style="'left:'+todayPct+'%'">
+            <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-red-400 rounded-full"></div>
+            <div class="absolute top-1 left-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded font-semibold whitespace-nowrap" style="font-size:10px">Heute</div>
+          </div>
+
+          <template x-for="lp in lps" :key="lp.n">
+            <div class="flex items-center h-16 border-b border-slate-100 relative px-1"
+              :class="lp.active ? 'bg-blue-50/30' : 'hover:bg-slate-50/50'">
+
+              <!-- Planned bar (background) -->
+              <div class="absolute h-3.5 rounded-full opacity-30 top-1/2 -translate-y-1/2"
+                :class="lp.status==='delayed' ? 'bg-red-400' : (lp.status==='approved' ? 'bg-green-500' : 'bg-blue-400')"
+                :style="'left:'+lp.plannedLeft+'%;width:'+lp.plannedWidth+'%'">
+              </div>
+
+              <!-- Actual bar (foreground) -->
+              <div x-show="lp.actualLeft !== null"
+                class="absolute h-5 rounded-full top-1/2 -translate-y-1/2 flex items-center px-2 overflow-hidden"
+                :class="lp.status==='approved' ? 'bg-green-500' : (lp.status==='in_progress' ? 'bg-blue-500' : (lp.status==='delayed' ? 'bg-red-400' : 'bg-slate-300'))"
+                :style="'left:'+lp.actualLeft+'%;width:'+Math.max(lp.actualWidth,2)+'%'">
+                <span class="text-white text-xs font-bold whitespace-nowrap overflow-hidden"
+                  x-text="lp.actualWidth > 5 ? 'LP'+lp.n+' — '+lp.name : ''"></span>
+              </div>
+
+              <!-- LP label on bar (if no actual bar) -->
+              <div x-show="lp.actualLeft === null"
+                class="absolute h-5 rounded-full top-1/2 -translate-y-1/2 flex items-center px-2"
+                :class="lp.status==='pending' ? 'border border-dashed border-slate-300 bg-transparent' : 'bg-slate-200'"
+                :style="'left:'+lp.plannedLeft+'%;width:'+lp.plannedWidth+'%'">
+                <span class="text-slate-400 text-xs font-semibold whitespace-nowrap" x-text="lp.plannedWidth > 4 ? 'LP'+lp.n : ''"></span>
+              </div>
+
+              <!-- Milestone diamond at end -->
+              <div class="absolute w-3 h-3 rotate-45 border-2 z-10 top-1/2 -translate-y-1/2"
+                :class="milestoneStyle(lp)"
+                :style="'left:calc('+lp.plannedLeft+'% + '+lp.plannedWidth+'% - 6px)'">
+              </div>
+
+            </div>
+          </template>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- end gantt content -->
+
+  <!-- EDIT MODAL -->
+  <div x-show="showModal" x-cloak
+    class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+    @click.self="showModal=false">
+    <div x-show="showModal" x-transition
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2"
+            :class="selectedLP ? lpCircleStyle(selectedLP) : ''">
+            <span x-text="selectedLP ? selectedLP.n : ''"></span>
+          </div>
+          <div>
+            <h2 class="font-semibold text-slate-900" x-text="selectedLP ? 'LP '+selectedLP.n+' — '+selectedLP.name : ''"></h2>
+            <p class="text-xs text-slate-500 mt-0.5" x-text="selectedLP ? statusLabel(selectedLP.status) : ''"></p>
+          </div>
+        </div>
+        <button @click="showModal=false" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Geplantes Datum</label>
+            <input type="date" x-model="selectedLP && selectedLP.plannedDateStr"
+              class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Tatsächliches Datum</label>
+            <input type="date" x-model="selectedLP && selectedLP.actualDateStr"
+              class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Status</label>
+          <select class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 bg-white"
+            x-model="selectedLP && selectedLP.status">
+            <option value="pending">Ausstehend</option>
+            <option value="in_progress">In Bearbeitung</option>
+            <option value="submitted">Eingereicht</option>
+            <option value="approved">Genehmigt</option>
+            <option value="delayed">Verzögert</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Notizen</label>
+          <textarea rows="3" placeholder="Meilensteinnotizen, Risiken, Abhängigkeiten…"
+            x-model="selectedLP && selectedLP.notes"
+            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 resize-none placeholder:text-slate-300"></textarea>
+        </div>
+        <div x-show="selectedLP && (selectedLP.status === 'approved' || selectedLP.status === 'submitted')"
+          class="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
+          <i data-lucide="file-text" class="w-5 h-5 text-green-600 shrink-0"></i>
+          <div class="flex-1">
+            <p class="text-xs font-semibold text-green-800">LP-Bericht generieren</p>
+            <p class="text-xs text-green-600">PDF-Bericht für diesen Meilenstein erstellen</p>
+          </div>
+          <button class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-green-700">Generieren</button>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+        <button @click="showModal=false" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Abbrechen</button>
+        <button @click="showModal=false" class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Mockup nav -->
+<div class="fixed bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full shadow-md px-5 py-1.5 flex items-center gap-3 z-50 text-xs">
+  <a href="05-criterion-detail.html" class="text-slate-400 hover:text-slate-700">← Criterion Detail</a>
+  <span class="text-slate-200">|</span>
+  <span class="text-slate-400 font-semibold">06 Gantt</span>
+  <span class="text-slate-200">|</span>
+  <a href="07-reports.html" class="text-slate-400 hover:text-slate-700">Berichte →</a>
+</div>
+
+<script>
+function ganttApp() {
+  // Timeline: Jan 2025 – Feb 2028 = 37 months
+  const START = new Date(2025, 0, 1); // Jan 2025
+  const TOTAL_MONTHS = 37;
+
+  function datePct(date) {
+    const d = new Date(date);
+    const months = (d.getFullYear() - START.getFullYear()) * 12 + d.getMonth() - START.getMonth();
+    return Math.max(0, Math.min(100, (months / TOTAL_MONTHS) * 100));
+  }
+  function widthPct(from, to) {
+    return Math.max(1, datePct(to) - datePct(from));
+  }
+
+  const today = new Date(2026, 4, 10); // May 10, 2026
+
+  const lpData = [
+    { n:1, name:'Grundlagenermittlung',   status:'approved',    plannedFrom:'2025-01-01', plannedTo:'2025-03-15', actualFrom:'2025-01-05', actualTo:'2025-03-20', criteriaReady:2, criteriaTotal:2,  notes:'Grundlagenermittlung abgeschlossen.',  plannedDateStr:'2025-03-15', actualDateStr:'2025-03-20' },
+    { n:2, name:'Vorplanung',             status:'approved',    plannedFrom:'2025-03-15', plannedTo:'2025-07-01', actualFrom:'2025-03-20', actualTo:'2025-07-10', criteriaReady:8, criteriaTotal:8,  notes:'Leicht verspätet, alle Kriterien OK.', plannedDateStr:'2025-07-01', actualDateStr:'2025-07-10' },
+    { n:3, name:'Entwurfsplanung',        status:'in_progress', plannedFrom:'2025-07-01', plannedTo:'2026-09-01', actualFrom:'2025-07-10', actualTo:null,         criteriaReady:8, criteriaTotal:24, notes:'LCA und Energieberechnung laufen.',    plannedDateStr:'2026-09-01', actualDateStr:'' },
+    { n:4, name:'Genehmigungsplanung',    status:'pending',     plannedFrom:'2026-09-01', plannedTo:'2026-12-01', actualFrom:null,         actualTo:null,         criteriaReady:0, criteriaTotal:4,  notes:'',                                    plannedDateStr:'2026-12-01', actualDateStr:'' },
+    { n:5, name:'Ausführungsplanung',     status:'pending',     plannedFrom:'2026-12-01', plannedTo:'2027-04-01', actualFrom:null,         actualTo:null,         criteriaReady:0, criteriaTotal:18, notes:'',                                    plannedDateStr:'2027-04-01', actualDateStr:'' },
+    { n:6, name:'Vorbereitung Vergabe',   status:'pending',     plannedFrom:'2027-04-01', plannedTo:'2027-06-01', actualFrom:null,         actualTo:null,         criteriaReady:0, criteriaTotal:2,  notes:'',                                    plannedDateStr:'2027-06-01', actualDateStr:'' },
+    { n:7, name:'Mitwirkung Vergabe',     status:'pending',     plannedFrom:'2027-06-01', plannedTo:'2027-08-01', actualFrom:null,         actualTo:null,         criteriaReady:0, criteriaTotal:4,  notes:'',                                    plannedDateStr:'2027-08-01', actualDateStr:'' },
+    { n:8, name:'Objektüberwachung',      status:'pending',     plannedFrom:'2027-08-01', plannedTo:'2028-01-15', actualFrom:null,         actualTo:null,         criteriaReady:0, criteriaTotal:8,  notes:'Fertigstellungstermin Jan 2028.',      plannedDateStr:'2028-01-15', actualDateStr:'' },
+  ];
+
+  // Enrich with Gantt positions
+  const lps = lpData.map(lp => {
+    const pLeft = datePct(lp.plannedFrom);
+    const pWidth = widthPct(lp.plannedFrom, lp.plannedTo);
+    const aLeft = lp.actualFrom ? datePct(lp.actualFrom) : null;
+    const aWidth = lp.actualFrom ? (lp.actualTo ? widthPct(lp.actualFrom, lp.actualTo) : (datePct(today) - datePct(lp.actualFrom))) : 0;
+    return {
+      ...lp,
+      active: lp.status === 'in_progress',
+      plannedLeft: pLeft, plannedWidth: pWidth,
+      actualLeft: aLeft, actualWidth: aWidth,
+      criteriaColor: lp.criteriaReady === lp.criteriaTotal ? 'text-green-600' : (lp.criteriaReady > 0 ? 'text-amber-600' : 'text-slate-400'),
+      criteriaBarColor: lp.criteriaReady === lp.criteriaTotal ? 'bg-green-500' : (lp.criteriaReady > 0 ? 'bg-amber-400' : 'bg-slate-200'),
+    };
+  });
+
+  // Generate months array
+  const months = [];
+  let prevYear = null;
+  for (let i = 0; i < TOTAL_MONTHS; i++) {
+    const d = new Date(2025, i, 1);
+    const labels = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+    months.push({
+      label: labels[d.getMonth()],
+      year: d.getFullYear(),
+      showYear: d.getFullYear() !== prevYear,
+      widthPct: 100 / TOTAL_MONTHS,
+      minPx: 28,
+      isCurrentMonth: d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(),
+    });
+    prevYear = d.getFullYear();
+  }
+
+  // Quarters
+  const quarters = [];
+  for (let y = 2025; y <= 2028; y++) {
+    for (let q = 1; q <= 4; q++) {
+      const startM = (q - 1) * 3;
+      const endM = startM + 3;
+      const qStart = new Date(y, startM, 1);
+      const qEnd = new Date(y, endM, 1);
+      const left = datePct(qStart);
+      const right = Math.min(100, datePct(qEnd));
+      if (right > 0 && left < 100) {
+        quarters.push({ label: `Q${q} ${y}`, widthPct: right - left });
+      }
+    }
+  }
+
+  return {
+    lps,
+    months,
+    quarters,
+    todayPct: datePct(today),
+    showModal: false,
+    selectedLP: null,
+
+    openModal(lp) {
+      this.selectedLP = { ...lp };
+      this.showModal = true;
+      this.$nextTick(() => lucide.createIcons());
+    },
+    formatDateRange(lp) {
+      if (lp.actualDateStr) return 'Ist: ' + lp.actualDateStr;
+      return 'Plan: ' + lp.plannedDateStr;
+    },
+    lpCircleStyle(lp) {
+      if (lp.status === 'approved') return 'border-green-500 bg-green-500 text-white';
+      if (lp.status === 'in_progress') return 'border-blue-500 bg-blue-50 text-blue-700';
+      if (lp.status === 'delayed') return 'border-red-400 bg-red-50 text-red-600';
+      return 'border-slate-300 bg-white text-slate-400';
+    },
+    statusBadge(s) {
+      return { approved:'bg-green-100 text-green-700', in_progress:'bg-blue-100 text-blue-700', pending:'bg-slate-100 text-slate-500', submitted:'bg-violet-100 text-violet-700', delayed:'bg-red-100 text-red-600' }[s] || 'bg-slate-100 text-slate-500';
+    },
+    statusShort(s) {
+      return { approved:'✓ OK', in_progress:'Aktiv', pending:'Aussteh.', submitted:'Eingere.', delayed:'Verzög.' }[s] || s;
+    },
+    statusLabel(s) {
+      return { approved:'Genehmigt', in_progress:'In Bearbeitung', pending:'Ausstehend', submitted:'Eingereicht', delayed:'Verzögert' }[s] || s;
+    },
+    milestoneStyle(lp) {
+      if (lp.status === 'approved') return 'border-green-500 bg-green-100';
+      if (lp.status === 'in_progress') return 'border-blue-500 bg-blue-100';
+      if (lp.status === 'delayed') return 'border-red-400 bg-red-100';
+      return 'border-slate-300 bg-white';
+    },
+  };
+}
+
+document.addEventListener('alpine:initialized', () => lucide.createIcons());
+</script>
+</body>
+</html>

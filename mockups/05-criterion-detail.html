@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Detalle Criterio 1.1.1</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    .tab-active  { border-bottom: 2px solid #16a34a; color: #15803d; font-weight: 600; }
+    .tab-default { color: #64748b; }
+    .tab-default:hover { color: #334155; }
+    input[type=range] { accent-color: #16a34a; }
+    input[type=checkbox] { accent-color: #16a34a; }
+  </style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+
+<!--
+  DECISIONES DE DISEÑO (05-criterion-detail.html):
+  - Página completa (no drawer) — URL: /projects/[id]/criteria/[criteriaId]
+  - Layout: header + project-tabs + criterion-header + two-col (main + sidebar)
+  - Main tabs: Bewertungen | Dokumente | Formulare | Kommentare
+  - Bewertungen: card por LP aplicable (LP3 activo/expandido, LP5/8 colapsados)
+    Score: slider + input numérico, historial de versiones, submit individual por LP
+  - Dokumente: LP filter + lista de archivos + upload zone + tag evidencia/borrador
+  - Formulare: template JSONB renderizado (campos reales de LCA para criterio 1.1.1)
+    Al enviar → template_submissions INSERT; campos guardados como JSONB
+  - Kommentare: hilo interno/externo, @mention visual, attach file
+  - Sidebar: descripción BNB, LP requirements, info BZ/peso, asignación, PDF link
+  - Nav: ← anterior / → siguiente criterio dentro de la matriz
+  - Next.js: app/[locale]/(dashboard)/projects/[id]/criteria/[criteriaId]/page.tsx
+  - Server Component: fetch project_criteria + criterion_def + evaluations en paralelo
+  - Client Component: tabs, forms, upload → Server Actions para mutaciones
+-->
+
+<div x-data="detailApp()" class="flex flex-col h-screen">
+
+  <!-- HEADER -->
+  <header class="h-12 bg-white border-b border-slate-200 flex items-center px-5 gap-3 shrink-0 z-20">
+    <a href="02-dashboard.html" class="flex items-center gap-2 shrink-0">
+      <div class="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+        <span class="text-white font-bold text-xs">BNB</span>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">BNBtracker</span>
+    </a>
+    <span class="text-slate-300">/</span>
+    <a href="02-dashboard.html" class="text-slate-500 text-sm hover:text-slate-700">Projekte</a>
+    <span class="text-slate-300">/</span>
+    <a href="03-project-overview.html" class="text-slate-500 text-sm hover:text-slate-700 truncate max-w-32">Bundesministerium Berlin</a>
+    <span class="text-slate-300">/</span>
+    <a href="04-criteria-matrix.html" class="text-slate-500 text-sm hover:text-slate-700">Kriterien</a>
+    <span class="text-slate-300">/</span>
+    <span class="font-semibold text-slate-800 text-sm bg-green-100 text-green-800 px-2 py-0.5 rounded font-mono" x-text="currentCriteria().code"></span>
+    <span class="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold shrink-0" x-text="'LP ' + currentLP + ' aktiv'"></span>
+    <div class="ml-auto flex items-center gap-3">
+      <button class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+        <i data-lucide="bell" class="w-4 h-4"></i>
+      </button>
+      <div class="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-semibold">JM</div>
+    </div>
+  </header>
+
+  <!-- PROJECT NAV TABS -->
+  <div class="bg-white border-b border-slate-200 px-4 flex items-center gap-0.5 shrink-0">
+    <a href="03-project-overview.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>Übersicht
+    </a>
+    <a href="04-criteria-matrix.html" class="px-3 py-2.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 flex items-center gap-1.5">
+      <i data-lucide="table-2" class="w-3.5 h-3.5"></i>Kriterien
+    </a>
+    <a href="06-gantt.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="gantt-chart" class="w-3.5 h-3.5"></i>Gantt
+    </a>
+    <a href="07-reports.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>Berichte
+    </a>
+    <a href="08-members.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="users" class="w-3.5 h-3.5"></i>Mitglieder
+    </a>
+  </div>
+
+  <!-- CRITERION HEADER BAR -->
+  <div class="bg-white border-b border-slate-200 px-5 py-3 shrink-0">
+    <div class="flex items-start gap-4">
+
+      <!-- Back + prev/next -->
+      <div class="flex items-center gap-1 shrink-0 mt-0.5">
+        <a href="04-criteria-matrix.html"
+          class="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>Matrix
+        </a>
+        <button @click="goPrev()" :disabled="currentIndex===0"
+          class="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+          :class="currentIndex===0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700'" title="Vorheriges Kriterium">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+        <button @click="goNext()" :disabled="currentIndex===criteriaDefinitions.length-1"
+          class="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+          :class="currentIndex===criteriaDefinitions.length-1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700'" title="Nächstes Kriterium">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+        <span class="text-xs text-slate-400 ml-1" x-text="(currentIndex+1) + ' / ' + criteriaDefinitions.length"></span>
+      </div>
+
+      <!-- Criterion identity -->
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+          <span class="font-mono font-bold text-sm px-2 py-0.5 rounded bg-green-100 text-green-800" x-text="currentCriteria().code"></span>
+          <span class="text-xs px-2 py-0.5 rounded-full border font-medium" :class="areaColor(currentCriteria().area)" x-text="'Q' + currentCriteria().area + ' — ' + areaLabel(currentCriteria().area)"></span>
+          <span class="text-xs px-2 py-0.5 rounded font-bold" :class="bzColor(currentCriteria().bz)" x-text="'BZ ' + currentCriteria().bz"></span>
+          <span class="text-xs text-slate-400 font-medium" x-text="bzImportance(currentCriteria().bz)"></span>
+        </div>
+        <h1 class="text-base font-bold text-slate-900 leading-tight" x-text="currentCriteria().name_de"></h1>
+        <p class="text-xs text-slate-400 mt-0.5 italic" x-text="currentCriteria().name_sub"></p>
+      </div>
+
+      <!-- Status + score controls -->
+      <div class="flex items-center gap-3 shrink-0">
+        <!-- Score pill -->
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+          <span class="text-xs text-slate-500" x-text="'Score LP' + currentLP"></span>
+          <template x-if="evals[currentLP]">
+            <div class="flex items-center gap-1.5">
+              <div class="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all" :class="scoreBarColor(evals[currentLP].score)" :style="'width:'+evals[currentLP].score+'%'"></div>
+              </div>
+              <span class="text-sm font-bold" :class="scoreTextColor(evals[currentLP].score)" x-text="evals[currentLP].score + '%'"></span>
+            </div>
+          </template>
+          <template x-if="!evals[currentLP]">
+            <span class="text-sm font-bold text-slate-400">—</span>
+          </template>
+        </div>
+        <!-- Status select -->
+        <select x-model="overallStatus"
+          class="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 font-medium">
+          <option value="not_started">Nicht begonnen</option>
+          <option value="in_progress">In Bearbeitung</option>
+          <option value="completed">Abgeschlossen</option>
+          <option value="not_applicable">Nicht relevant</option>
+        </select>
+        <!-- Assigned user -->
+        <div class="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-violet-100 transition-colors">
+          <div class="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center text-white text-xs font-semibold">AM</div>
+          <span class="text-xs font-medium text-violet-700">Anna Müller</span>
+          <i data-lucide="chevron-down" class="w-3 h-3 text-violet-400"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- LP mini-timeline -->
+    <div class="flex items-center gap-2 mt-3">
+      <span class="text-xs text-slate-400 shrink-0">Leistungsphasen:</span>
+      <div class="flex items-center gap-1">
+        <template x-for="lp in [1,2,3,4,5,6,7,8]" :key="lp">
+          <div class="flex flex-col items-center gap-0.5">
+            <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs font-semibold border transition-all"
+              :class="lpMiniStyle(lp)">
+              <template x-if="currentCriteria().lps.includes(lp) && getStatus(lp) === 'completed'">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </template>
+              <template x-if="!currentCriteria().lps.includes(lp) || getStatus(lp) !== 'completed'">
+                <span x-text="lp"></span>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+      <span class="text-xs text-slate-400 ml-2" x-text="'Bewertet bei LP ' + currentCriteria().lps.join(', ')"></span>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT (two columns, scrollable) -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- LEFT: Tabs + content -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Tab bar -->
+      <div class="bg-white border-b border-slate-200 px-5 flex items-center gap-0 shrink-0">
+        <button @click="activeTab='evaluations'"
+          class="px-4 py-3 text-sm transition-colors"
+          :class="activeTab==='evaluations' ? 'tab-active' : 'tab-default'">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>Bewertungen
+          </span>
+        </button>
+        <button @click="activeTab='documents'"
+          class="px-4 py-3 text-sm transition-colors"
+          :class="activeTab==='documents' ? 'tab-active' : 'tab-default'">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="file-stack" class="w-3.5 h-3.5"></i>Dokumente
+            <span class="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-full">2</span>
+          </span>
+        </button>
+        <button @click="activeTab='forms'"
+          class="px-4 py-3 text-sm transition-colors"
+          :class="activeTab==='forms' ? 'tab-active' : 'tab-default'">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="form-input" class="w-3.5 h-3.5"></i>Formular
+            <span class="bg-amber-100 text-amber-600 text-xs px-1.5 py-0.5 rounded-full font-medium">Entwurf</span>
+          </span>
+        </button>
+        <button @click="activeTab='comments'"
+          class="px-4 py-3 text-sm transition-colors"
+          :class="activeTab==='comments' ? 'tab-active' : 'tab-default'">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>Kommentare
+            <span class="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-full">3</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Tab content -->
+      <div class="flex-1 overflow-y-auto p-6">
+
+        <!-- ═══════════════════════════════════════ BEWERTUNGEN -->
+        <div x-show="activeTab==='evaluations'" class="space-y-4 max-w-2xl">
+
+          <!-- Bewertungsstufen (Steckbrief options) -->
+          <div x-show="currentCriteria().options.length > 0" class="border border-slate-200 rounded-xl overflow-hidden">
+            <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <p class="text-sm font-semibold text-slate-700">Qualitätsniveaus (Steckbrief)</p>
+              <p class="text-xs text-slate-400">
+                Klicken setzt Erfüllungsgrad für
+                <span class="font-medium text-slate-600" x-text="'LP ' + (expandedLP || currentLP)"></span>
+              </p>
+            </div>
+            <div class="flex divide-x divide-slate-200">
+              <template x-for="opt in currentCriteria().options" :key="opt.level">
+                <button @click="pickOption(opt)"
+                  class="flex-1 flex flex-col items-center gap-1 px-3 py-3 text-center transition-all"
+                  :class="activeOption(expandedLP || currentLP) === opt.level
+                    ? 'bg-green-50'
+                    : 'bg-white hover:bg-slate-50'">
+                  <span class="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all"
+                    :class="activeOption(expandedLP || currentLP) === opt.level
+                      ? 'border-green-500 bg-green-500 text-white'
+                      : 'border-slate-300 text-slate-500'"
+                    x-text="opt.level"></span>
+                  <span class="text-xs font-bold tabular-nums"
+                    :class="activeOption(expandedLP || currentLP) === opt.level ? 'text-green-700' : 'text-slate-700'"
+                    x-text="opt.punkte + ' %'"></span>
+                  <span class="text-xs leading-snug mt-0.5"
+                    :class="activeOption(expandedLP || currentLP) === opt.level ? 'text-green-600' : 'text-slate-400'"
+                    x-text="opt.desc"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+
+          <template x-for="lp in currentCriteria().lps" :key="lp">
+            <div class="border rounded-xl overflow-hidden"
+              :class="lp===currentLP ? 'border-blue-300 shadow-md' : 'border-slate-200'">
+
+              <!-- LP card header -->
+              <div @click="toggleLpExpand(lp)" class="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none"
+                :class="lp===currentLP ? 'bg-blue-50' : (lp < currentLP ? 'bg-slate-50' : 'bg-white')">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2"
+                    :class="lpBadgeStyle(lp)">
+                    <template x-if="getStatus(lp)==='completed'">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    </template>
+                    <template x-if="getStatus(lp)!=='completed'">
+                      <span x-text="lp"></span>
+                    </template>
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-semibold text-sm text-slate-800" x-text="'Leistungsphase '+lp"></span>
+                      <span x-show="lp===currentLP" class="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded font-medium">Aktuell</span>
+                      <span x-show="lp<currentLP" class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Abgeschlossen</span>
+                      <span x-show="lp>currentLP" class="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded">Ausstehend</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5" x-text="lpName(lp)"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <template x-if="evals[lp] && evals[lp].score > 0">
+                    <div class="flex items-center gap-2">
+                      <div class="w-16 h-1.5 bg-slate-200 rounded-full">
+                        <div class="h-full rounded-full transition-all"
+                          :class="scoreBarColor(evals[lp].score)"
+                          :style="'width:'+evals[lp].score+'%'"></div>
+                      </div>
+                      <span class="text-sm font-bold" :class="scoreTextColor(evals[lp].score)" x-text="evals[lp].score+'%'"></span>
+                    </div>
+                  </template>
+                  <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform"
+                    :class="expandedLP===lp ? 'rotate-180' : ''"></i>
+                </div>
+              </div>
+
+              <!-- LP card body (expanded) -->
+              <div x-show="expandedLP===lp" x-transition class="border-t border-slate-200"
+                :class="lp > currentLP ? 'opacity-60 pointer-events-none' : ''">
+                <div class="px-5 py-4 space-y-4">
+
+                  <!-- Context: what BNB expects at this LP -->
+                  <div class="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-xs text-blue-800">
+                    <p class="font-semibold mb-0.5 flex items-center gap-1.5">
+                      <i data-lucide="info" class="w-3.5 h-3.5"></i>
+                      Anforderung LP <span x-text="lp"></span>
+                    </p>
+                    <p x-text="lpRequirement(lp)"></p>
+                  </div>
+
+                  <!-- Score slider -->
+                  <div>
+                    <label class="text-xs font-semibold text-slate-700 block mb-2">Erfüllungsgrad (%)</label>
+                    <div class="flex items-center gap-3">
+                      <input type="range" min="0" max="100" step="5"
+                        x-model.number="evals[lp].score"
+                        class="flex-1 h-2 cursor-pointer">
+                      <div class="flex items-center gap-1">
+                        <input type="number" min="0" max="100"
+                          x-model.number="evals[lp].score"
+                          class="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center font-bold focus:outline-none focus:ring-1 focus:ring-green-500">
+                        <span class="text-sm text-slate-400 font-medium">%</span>
+                      </div>
+                    </div>
+                    <!-- Score context legend -->
+                    <div class="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
+                      <span>0% Nicht erfüllt</span>
+                      <span>50% Bronze</span>
+                      <span>100% Maximal</span>
+                    </div>
+                  </div>
+
+                  <!-- Notes -->
+                  <div>
+                    <label class="text-xs font-semibold text-slate-700 block mb-2">Bewertungsnotizen</label>
+                    <textarea x-model="evals[lp].notes"
+                      placeholder="Begründung der Bewertung, verwendete Unterlagen, offene Punkte…"
+                      rows="3"
+                      class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 resize-none placeholder:text-slate-300"></textarea>
+                  </div>
+
+                  <!-- Submit row -->
+                  <div class="flex items-center justify-between pt-1">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" x-model="evals[lp].mark_done" class="rounded w-4 h-4">
+                      <span class="text-sm text-slate-600">Als abgeschlossen einreichen</span>
+                    </label>
+                    <div class="flex items-center gap-2">
+                      <button class="text-sm text-slate-500 hover:text-slate-700 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors">
+                        Entwurf
+                      </button>
+                      <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5">
+                        <i data-lucide="save" class="w-3.5 h-3.5"></i>Speichern
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Submission history (LP3 only, sample) -->
+                  <template x-if="lp === 3">
+                    <div class="border-t border-slate-100 pt-3">
+                      <p class="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
+                        <i data-lucide="history" class="w-3.5 h-3.5"></i>Verlauf
+                      </p>
+                      <div class="space-y-1.5">
+                        <div class="flex items-center gap-2 text-xs text-slate-500">
+                          <span class="text-slate-300">─</span>
+                          <span class="font-medium text-slate-700">AM</span>
+                          <span>Bewertung aktualisiert auf 65% — 12. Mai 2026, 14:23</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-500">
+                          <span class="text-slate-300">─</span>
+                          <span class="font-medium text-slate-700">AM</span>
+                          <span>Erste Bewertung: 55% eingetragen — 05. Mai 2026, 09:10</span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+            </div>
+          </template>
+
+        </div><!-- end Bewertungen -->
+
+        <!-- ═══════════════════════════════════════ DOKUMENTE -->
+        <div x-show="activeTab==='documents'" class="max-w-2xl space-y-4">
+
+          <!-- LP filter -->
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-slate-500 font-medium">LP:</span>
+            <template x-for="lp in currentCriteria().lps" :key="lp">
+              <button @click="activeLpDocs=lp"
+                class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors"
+                :class="activeLpDocs===lp ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                x-text="'LP '+lp"></button>
+            </template>
+            <span class="ml-auto text-xs text-slate-400">2 Dokumente</span>
+          </div>
+
+          <!-- Document list -->
+          <div class="space-y-2">
+            <!-- Doc 1 -->
+            <div class="flex items-center gap-3 p-3.5 bg-white border border-slate-200 rounded-xl hover:border-slate-300 transition-colors group">
+              <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                <i data-lucide="file-text" class="w-5 h-5 text-red-500"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-slate-800">LCA-Berechnung_LP3_v2.pdf</p>
+                <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span class="text-xs text-slate-400">PDF · 2.4 MB</span>
+                  <span class="text-xs text-slate-300">·</span>
+                  <span class="text-xs text-slate-400">hochgeladen von AM, 15.05.2026</span>
+                  <span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Nachweis</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Vorschau">
+                  <i data-lucide="eye" class="w-4 h-4"></i>
+                </button>
+                <button class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Herunterladen">
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                </button>
+                <button class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Löschen">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+            <!-- Doc 2 -->
+            <div class="flex items-center gap-3 p-3.5 bg-white border border-slate-200 rounded-xl hover:border-slate-300 transition-colors group">
+              <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                <i data-lucide="file-spreadsheet" class="w-5 h-5 text-emerald-600"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-slate-800">Ökobilanz_Materialien_v1.xlsx</p>
+                <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span class="text-xs text-slate-400">XLSX · 0.8 MB</span>
+                  <span class="text-xs text-slate-300">·</span>
+                  <span class="text-xs text-slate-400">hochgeladen von KL, 10.05.2026</span>
+                  <span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">Arbeitsdokument</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                  <i data-lucide="eye" class="w-4 h-4"></i>
+                </button>
+                <button class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                </button>
+                <button class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upload zone -->
+          <div class="border-2 border-dashed border-slate-200 rounded-xl p-7 text-center hover:border-green-400 hover:bg-green-50/20 cursor-pointer transition-all group">
+            <i data-lucide="upload-cloud" class="w-8 h-8 text-slate-300 group-hover:text-green-500 mx-auto mb-2.5 transition-colors"></i>
+            <p class="text-sm font-semibold text-slate-600 group-hover:text-slate-800">Dateien hierher ziehen oder klicken</p>
+            <p class="text-xs text-slate-400 mt-1">PDF, DOCX, XLSX, DWG, IFC, PNG · Max. 50 MB</p>
+            <div class="flex items-center justify-center gap-3 mt-4">
+              <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                <input type="radio" name="doctype" value="evidence" checked class="accent-green-600"> Nachweis / Evidenz
+              </label>
+              <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                <input type="radio" name="doctype" value="work" class="accent-green-600"> Arbeitsdokument
+              </label>
+            </div>
+          </div>
+
+        </div><!-- end Dokumente -->
+
+        <!-- ═══════════════════════════════════════ FORMULARE -->
+        <div x-show="activeTab==='forms'" class="max-w-2xl">
+
+          <!-- Placeholder for non-1.1.1 criteria -->
+          <template x-if="currentCriteria().code !== '1.1.1'">
+            <div class="border border-dashed border-slate-200 rounded-xl p-10 text-center text-slate-400">
+              <i data-lucide="file-plus" class="w-8 h-8 mx-auto mb-3 opacity-40"></i>
+              <p class="text-sm font-medium">Kein Template für <span class="font-mono" x-text="currentCriteria().code"></span></p>
+              <p class="text-xs mt-1">Formulare werden je Kriterium in der DB hinterlegt (document_templates).</p>
+              <button class="mt-4 px-4 py-2 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5 mx-auto">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>Template erstellen
+              </button>
+            </div>
+          </template>
+
+          <!-- LCA form — only for 1.1.1 -->
+          <template x-if="currentCriteria().code === '1.1.1'">
+          <div>
+
+          <!-- Form header -->
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="font-semibold text-slate-900">Ökobilanz-Nachweis (LP 3)</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Template: BNB_1.1.1_LCA_Standard · Zuletzt gespeichert: 12. Mai 2026</p>
+            </div>
+            <span class="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full font-medium">Entwurf</span>
+          </div>
+
+          <!-- Form fields (JSONB template rendered) -->
+          <div class="space-y-5">
+
+            <!-- Field 1: Berechnungsmethode -->
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+                Berechnungsmethode <span class="text-red-400">*</span>
+              </label>
+              <select x-model="form.method"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 bg-white">
+                <option value="">Bitte wählen…</option>
+                <option value="din15978">DIN EN 15978 (Gebäudeebene)</option>
+                <option value="din15804">DIN EN 15804 + A2</option>
+                <option value="bbsr">BBSR-Arbeitshilfe Nachhaltiges Bauen</option>
+                <option value="other">Andere Methode</option>
+              </select>
+            </div>
+
+            <!-- Field 2: GWP-Wert -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+                  GWP-Wert <span class="text-red-400">*</span>
+                </label>
+                <div class="flex items-center gap-2">
+                  <input type="number" step="0.1" x-model="form.gwp_value"
+                    class="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                    placeholder="z.B. 18.3">
+                  <span class="text-sm text-slate-500 whitespace-nowrap">kg CO₂-eq/m²a</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Betrachtungszeitraum
+                </label>
+                <div class="flex items-center gap-2">
+                  <input type="number" x-model="form.period"
+                    class="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                    placeholder="50">
+                  <span class="text-sm text-slate-500">Jahre</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Field 3: Datenquelle -->
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-1.5">Datenquelle / Datenbasis <span class="text-red-400">*</span></label>
+              <select x-model="form.datasource"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 bg-white">
+                <option value="">Bitte wählen…</option>
+                <option value="oekobaudat">ÖKOBAUDAT (BBSR)</option>
+                <option value="ecoinvent">ecoinvent</option>
+                <option value="epd">Produkt-EPDs (herstellerspezifisch)</option>
+                <option value="mixed">Kombination</option>
+              </select>
+            </div>
+
+            <!-- Field 4: Software -->
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-1.5">Berechnungssoftware</label>
+              <input type="text" x-model="form.software"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                placeholder="z.B. OneClick LCA, SimaPro, Legep…">
+            </div>
+
+            <!-- Field 5: Lebenszyklusphasen checkboxes -->
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">
+                Enthaltene Lebenszyklusphasen <span class="text-red-400">*</span>
+              </label>
+              <div class="grid grid-cols-3 gap-2">
+                <template x-for="phase in lcaPhases" :key="phase.code">
+                  <label class="flex items-center gap-2 p-2.5 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors"
+                    :class="form.phases.includes(phase.code) ? 'border-green-300 bg-green-50' : ''">
+                    <input type="checkbox" :value="phase.code"
+                      :checked="form.phases.includes(phase.code)"
+                      @change="togglePhase(phase.code)"
+                      class="rounded w-4 h-4 shrink-0">
+                    <div>
+                      <span class="text-xs font-semibold text-slate-700" x-text="phase.code"></span>
+                      <span class="text-xs text-slate-400 block" x-text="phase.label"></span>
+                    </div>
+                  </label>
+                </template>
+              </div>
+            </div>
+
+            <!-- Field 6: Nachweis referenz -->
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-1.5">Nachweis-Dokument</label>
+              <div class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <i data-lucide="file-text" class="w-5 h-5 text-green-600 shrink-0"></i>
+                <span class="text-sm text-green-800 font-medium flex-1">LCA-Berechnung_LP3_v2.pdf</span>
+                <button class="text-xs text-green-600 hover:text-green-800 font-medium">Ändern</button>
+              </div>
+            </div>
+
+            <!-- Field 7: Bemerkungen -->
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-1.5">Bemerkungen</label>
+              <textarea x-model="form.remarks" rows="3" placeholder="Zusätzliche Hinweise, Abweichungen, offene Punkte…"
+                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 resize-none placeholder:text-slate-300"></textarea>
+            </div>
+
+          </div>
+
+          <!-- Form actions -->
+          <div class="flex items-center justify-between pt-5 mt-5 border-t border-slate-200">
+            <p class="text-xs text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="clock" class="w-3.5 h-3.5"></i>Entwurf gespeichert: 12. Mai 2026, 14:25
+            </p>
+            <div class="flex items-center gap-2">
+              <button class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors font-medium">
+                Entwurf speichern
+              </button>
+              <button class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold flex items-center gap-1.5">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>Einreichen
+              </button>
+            </div>
+          </div>
+
+          </div><!-- end LCA form inner -->
+          </template><!-- end x-if 1.1.1 -->
+
+        </div><!-- end Formulare -->
+
+        <!-- ═══════════════════════════════════════ KOMMENTARE -->
+        <div x-show="activeTab==='comments'" class="max-w-2xl space-y-4">
+
+          <!-- Internal/external switch -->
+          <div class="flex gap-1.5 p-1 bg-slate-100 rounded-xl w-64">
+            <button @click="commentType='internal'"
+              :class="commentType==='internal' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'"
+              class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all">
+              <span class="flex items-center justify-center gap-1.5">
+                <i data-lucide="lock" class="w-3.5 h-3.5"></i>Intern (3)
+              </span>
+            </button>
+            <button @click="commentType='external'"
+              :class="commentType==='external' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'"
+              class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all">
+              <span class="flex items-center justify-center gap-1.5">
+                <i data-lucide="globe" class="w-3.5 h-3.5"></i>Extern (1)
+              </span>
+            </button>
+          </div>
+
+          <!-- Comment thread -->
+          <div class="space-y-4">
+            <!-- Comment 1 -->
+            <div class="flex gap-3">
+              <div class="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">JM</div>
+              <div class="flex-1">
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="font-semibold text-sm text-slate-900">Julia Müller</span>
+                    <span class="text-xs text-slate-400">12. Mai 2026 · 09:30</span>
+                  </div>
+                  <p class="text-sm text-slate-700">Bitte die Ökobilanzberechnung bis <strong>20. Mai</strong> aktualisieren — Haustechnikplaner liefert Betriebsenergie-Werte bis 18. Mai.</p>
+                  <div class="flex items-center gap-2 mt-2.5">
+                    <button class="text-xs text-slate-400 hover:text-blue-600 flex items-center gap-1 transition-colors">
+                      <i data-lucide="reply" class="w-3 h-3"></i>Antworten
+                    </button>
+                    <button class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors">
+                      <i data-lucide="thumbs-up" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Comment 2 (reply) -->
+            <div class="flex gap-3 ml-8">
+              <div class="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">AM</div>
+              <div class="flex-1">
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="font-semibold text-sm text-slate-900">Anna Müller</span>
+                    <span class="text-xs text-slate-400">12. Mai 2026 · 14:15</span>
+                  </div>
+                  <p class="text-sm text-slate-700">Ok, die Werte sind da. Ich aktualisiere die LCA-Berechnung und lade eine neue Version hoch.</p>
+                </div>
+              </div>
+            </div>
+            <!-- Comment 3 (with attachment) -->
+            <div class="flex gap-3">
+              <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">KL</div>
+              <div class="flex-1">
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="font-semibold text-sm text-slate-900">Klaus Lang</span>
+                    <span class="text-xs text-slate-400">13. Mai 2026 · 11:00</span>
+                  </div>
+                  <p class="text-sm text-slate-700">Die v2 ist deutlich besser. Score sollte auf ~75% kommen wenn LP5-Werte ähnlich bleiben.</p>
+                  <div class="mt-2.5 flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                    <i data-lucide="file-text" class="w-4 h-4 text-red-500 shrink-0"></i>
+                    <span class="text-xs text-slate-600 font-medium flex-1">LCA-Berechnung_LP3_v2.pdf</span>
+                    <i data-lucide="download" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- New comment box -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div class="flex gap-3">
+              <div class="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold shrink-0">JM</div>
+              <div class="flex-1">
+                <textarea placeholder="Kommentar schreiben… (@mention möglich)" rows="3"
+                  class="w-full text-sm focus:outline-none resize-none placeholder:text-slate-300 text-slate-700"></textarea>
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                  <div class="flex items-center gap-2">
+                    <button class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="Datei anhängen">
+                      <i data-lucide="paperclip" class="w-4 h-4"></i>
+                    </button>
+                    <button class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="Mention">
+                      <i data-lucide="at-sign" class="w-4 h-4"></i>
+                    </button>
+                    <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer ml-2">
+                      <input type="checkbox" class="rounded w-3.5 h-3.5">
+                      Für Auftraggeber sichtbar
+                    </label>
+                  </div>
+                  <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5">
+                    <i data-lucide="send" class="w-3.5 h-3.5"></i>Senden
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- end Kommentare -->
+
+      </div><!-- end tab content -->
+    </div><!-- end left main -->
+
+    <!-- RIGHT SIDEBAR -->
+    <aside class="w-72 border-l border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0">
+      <div class="p-5 space-y-5">
+
+        <!-- Description -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Beschreibung (BNB)</h3>
+          <p class="text-xs text-slate-600 leading-relaxed" :class="showDesc ? '' : 'line-clamp-4'" x-text="currentCriteria().description"></p>
+          <button @click="showDesc=!showDesc" class="text-xs text-green-600 hover:text-green-800 mt-1 font-medium"
+            x-text="showDesc ? 'Weniger anzeigen' : 'Mehr anzeigen'"></button>
+        </div>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- LP requirements -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">Anforderungen je LP</h3>
+          <div class="space-y-2">
+            <template x-for="lp in currentCriteria().lps" :key="lp">
+              <div class="flex gap-2.5">
+                <span class="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 text-white"
+                  :class="lp === currentLP ? 'bg-blue-600' : (getStatus(lp)==='completed' ? 'bg-green-500' : 'bg-slate-300')"
+                  x-text="lp"></span>
+                <p class="text-xs leading-relaxed" :class="lp === currentLP ? 'text-slate-700' : 'text-slate-500'" x-text="lpRequirement(lp)"></p>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- BZ + Weight info -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">Bewertungsparameter</h3>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="border rounded-lg p-2.5 text-center" :class="bzColor(currentCriteria().bz).replace('text-','border-').replace('bg-','border-') + ' ' + bzColor(currentCriteria().bz)">
+              <p class="text-xs font-medium">Bedeutungszahl</p>
+              <p class="text-2xl font-black mt-0.5" x-text="currentCriteria().bz"></p>
+              <p class="text-xs" x-text="bzImportance(currentCriteria().bz).split(' ').pop()"></p>
+            </div>
+            <div class="bg-green-50 border border-green-200 rounded-lg p-2.5 text-center">
+              <p class="text-xs text-green-600 font-medium" x-text="'Q' + currentCriteria().area + ' Gewicht'"></p>
+              <p class="text-2xl font-black text-green-700 mt-0.5">22.5%</p>
+              <p class="text-xs text-green-500">Gesamt</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- Assigned user -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">Zugewiesen an</h3>
+          <template x-if="currentCriteria().assigned">
+            <div class="flex items-center gap-3 p-2.5 bg-violet-50 border border-violet-200 rounded-xl">
+              <div class="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center text-white text-sm font-bold shrink-0" x-text="currentCriteria().assigned.initials"></div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-slate-800" x-text="currentCriteria().assigned.name"></p>
+                <p class="text-xs text-slate-500" x-text="currentCriteria().assigned.role"></p>
+              </div>
+              <button class="text-xs text-violet-600 hover:text-violet-800 font-medium shrink-0">Ändern</button>
+            </div>
+          </template>
+          <template x-if="!currentCriteria().assigned">
+            <div class="p-2.5 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+              <p class="text-xs text-slate-400">Nicht zugewiesen</p>
+            </div>
+          </template>
+          <button class="w-full mt-2 py-2 border border-dashed border-slate-200 rounded-xl text-xs text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-colors flex items-center justify-center gap-1.5">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>Weiteres Mitglied hinzufügen
+          </button>
+        </div>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- BBSR link -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">Offizielle Unterlagen</h3>
+          <a :href="'../docs/bnb-criteria/BNB_BN2015_' + (currentCriteria().pdfCode || currentCriteria().code.replace(/\./g,'')) + '.pdf'" target="_blank"
+            class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-100 transition-colors group">
+            <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+              <i data-lucide="file-text" class="w-4 h-4 text-red-600"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-semibold text-slate-800" x-text="'BNB Steckbrief ' + currentCriteria().code"></p>
+              <p class="text-xs text-slate-500">BBSR Büro Neubau 2015</p>
+            </div>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 shrink-0"></i>
+          </a>
+        </div>
+
+        <!-- Metadata -->
+        <div class="border-t border-slate-100 pt-4">
+          <div class="space-y-1.5 text-xs text-slate-400">
+            <p>Zuletzt aktualisiert: <span class="text-slate-600">12. Mai 2026 · AM</span></p>
+            <p>Erstellt: <span class="text-slate-600">01. März 2026 · JM</span></p>
+            <p>Variante: <span class="text-slate-600">BNB Büro Neubau 2015</span></p>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </div><!-- end main content -->
+
+</div>
+
+<!-- Mockup nav -->
+<div class="fixed bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full shadow-md px-5 py-1.5 flex items-center gap-3 z-50 text-xs">
+  <a href="04-criteria-matrix.html" class="text-slate-400 hover:text-slate-700">← Matrix</a>
+  <span class="text-slate-200">|</span>
+  <span class="text-slate-400 font-semibold">05 Criterion Detail</span>
+  <span class="text-slate-200">|</span>
+  <a href="06-gantt.html" class="text-slate-400 hover:text-slate-700">Gantt →</a>
+</div>
+
+<script>
+function detailApp() {
+  // All scored criteria: maxPunkte=100 (Erfüllungsgrad %), levels QN4→QN1 per BNB convention
+  const qn = (d4,d3,d2,d1) => [
+    {level:'4',desc:d4,punkte:100},{level:'3',desc:d3,punkte:80},
+    {level:'2',desc:d2,punkte:60}, {level:'1',desc:d1,punkte:30}
+  ];
+  const qn3 = (d4,d3,d2) => [
+    {level:'4',desc:d4,punkte:100},{level:'3',desc:d3,punkte:80},{level:'2',desc:d2,punkte:60}
+  ];
+  const MP = 100;
+
+  const D = [
+    // ── Area 1 — Ökologische Qualität ──────────────────────────────────────
+    { code:'1.1.1', area:1, name_de:'Treibhauspotenzial (GWP)',               name_sub:'Global Warming Potential',             bz:3, lps:[3,5,8],   maxPunkte:MP,
+      assigned:{initials:'AM',name:'Anna Müller',role:'Spezialistin · Ökobilanz'},
+      description:'Bewertet das GWP des Gebäudes über den gesamten Lebenszyklus (DIN EN 15978). Berücksichtigt Herstellung, Betrieb und Rückbau aller Bauteile und Systeme.',
+      lp_req:{3:'Ökobilanzberechnung auf Basis des Entwurfs (LP3), alle Phasen A–C nach DIN EN 15978, Datenquelle ÖKOBAUDAT.',5:'Aktualisierung der Ökobilanz mit Ausführungsunterlagen und präzisierten Materialdaten.',8:'Abschließende Ökobilanzauswertung mit realen Ausführungsdaten und As-built-Dokumentation.'},
+      options: qn('GWP < 40 % des Referenzgebäudes','GWP 40–55 %','GWP 55–70 %','GWP 70–100 %') },
+    { code:'1.1.2', area:1, name_de:'Ozonschichtabbaupotenzial (ODP)',         name_sub:'Ozone Depletion Potential',            bz:1, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet das Ozonschichtabbaupotenzial der im Gebäude eingesetzten Materialien und haustechnischen Kältemittel über den Lebenszyklus.',
+      lp_req:{3:'ODP-Berechnung auf Basis gewählter Materialien und Kältemittel.',5:'Aktualisierung mit Ausführungsplanung.',8:'Endnachweis mit As-built-Dokumentation.'},
+      options: qn3('ODP < 30 % des Referenzgebäudes','ODP 30–60 %','ODP 60–100 %') },
+    { code:'1.1.3', area:1, name_de:'Ozonbildungspotenzial (POCP)',            name_sub:'Photochemical Ozone Creation Potential',bz:1, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet das Potenzial zur Bildung von bodennahem Ozon durch flüchtige organische Verbindungen aus Baumaterialien und Prozessen.',
+      lp_req:{3:'POCP-Berechnung auf Basis der gewählten Materialien.',5:'Aktualisierung mit Ausführungsplanung.',8:'Endnachweis mit Ausführungsdaten.'},
+      options: qn3('POCP < 40 % des Referenzgebäudes','POCP 40–70 %','POCP 70–100 %') },
+    { code:'1.1.4', area:1, name_de:'Versauerungspotenzial (AP)',              name_sub:'Acidification Potential',              bz:1, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet das Versauerungspotenzial der Emissionen aus Herstellung, Betrieb und Entsorgung aller Gebäudekomponenten.',
+      lp_req:{3:'AP-Berechnung auf Basis der Entwurfsplanung.',5:'Aktualisierung mit Ausführungsplanung.',8:'Endnachweis mit Ausführungsdaten.'},
+      options: qn3('AP < 30 % des Referenzgebäudes','AP 30–60 %','AP 60–100 %') },
+    { code:'1.1.5', area:1, name_de:'Überdüngungspotenzial (EP)',              name_sub:'Eutrophication Potential',             bz:1, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet das Nährstoffeintragsrisiko durch Bauprozesse und den Gebäudebetrieb in Gewässer und Boden.',
+      lp_req:{3:'EP-Berechnung auf Basis Entwurfsplanung.',5:'Aktualisierung mit Ausführungsplanung.',8:'Endnachweis mit Ausführungsdaten.'},
+      options: qn3('EP < 30 % des Referenzgebäudes','EP 30–60 %','EP 60–100 %') },
+    { code:'1.1.6', area:1, name_de:'Risiken für die lokale Umwelt',           name_sub:'Local Environmental Risks',           bz:1, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet die Risiken durch den Einsatz umwelt- und gesundheitsgefährdender Stoffe im Gebäudebau und -betrieb.',
+      lp_req:{3:'Schadstoffscreening und Risikobewertung der geplanten Materialien.',5:'Überprüfung Ausführungsunterlagen auf Risikostoffe.',8:'Nachweis über tatsächlich eingesetzte Materialien.'},
+      options: qn3('Keine Risikostoffe, vollständiger Nachweis','Risikostoffe dok., Minderungsmaßnahmen','Grundlegende Dokumentation vorhanden') },
+    { code:'1.1.7', area:1, name_de:'Nachhaltige Materialgewinnung (Holz)',    name_sub:'Sustainable Material Sourcing',        bz:1, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet den Anteil zertifizierter Hölzer (FSC/PEFC) an der gesamten im Gebäude eingesetzten Holzmenge.',
+      lp_req:{3:'Nachweis der geplanten Holzmengen und Zertifizierungsgrad.',5:'Überprüfung der Ausschreibungsunterlagen auf Zertifizierungsanforderungen.',8:'Liefernachweise für eingesetztes Holz mit Zertifikaten.'},
+      options: qn3('≥ 95 % zertifiziertes Holz (FSC/PEFC)','60–95 % zertifiziertes Holz','30–60 % zertifiziert oder Herkunftsnachweis') },
+    { code:'1.2.1', area:1, name_de:'Primärenergiebedarf (nicht erneuerbar)',  name_sub:'Non-Renewable Primary Energy Demand', bz:3, lps:[3,5,8],   maxPunkte:MP,
+      assigned:{initials:'KL',name:'Klaus Lang',role:'Spezialist · Energieplanung'},
+      description:'Bewertet den nicht erneuerbaren Primärenergiebedarf für Betrieb und Herstellung nach DIN V 18599 und GEG.',
+      lp_req:{3:'Energetische Simulation LP3, Betriebsenergieberechnung nach GEG/DIN V 18599.',5:'Aktualisierung Energieausweis mit Ausführungsplanung.',8:'Endabgleich mit Messwerten, Energieausweis Ist-Zustand.'},
+      options: qn('PEnr < 40 % des Referenzgebäudes','PEnr 40–55 %','PEnr 55–70 %','PEnr 70–100 %') },
+    { code:'1.2.3', area:1, name_de:'Trinkwasserbedarf und Abwasser',          name_sub:'Drinking Water Demand and Wastewater', bz:2, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet die Maßnahmen zur Reduzierung des Trinkwasserverbrauchs durch Effizienzarmaturen, Regenwassernutzung und Grauwasserrecycling.',
+      lp_req:{3:'Bedarfsberechnung Trinkwasser, Nachweis wassersparender Armaturen.',5:'Prüfung Ausführungsplanung auf wassersparende Maßnahmen.',8:'Nachweis eingebauter Armaturen und Messtechnik.'},
+      options: qn('Verbrauch < 40 % des Referenzgebäudes','Verbrauch 40–60 %','Verbrauch 60–80 %','Verbrauch 80–100 %') },
+    { code:'1.2.4', area:1, name_de:'Flächeninanspruchnahme',                  name_sub:'Land Use and Soil Sealing',           bz:2, lps:[1,3],     maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet den Anteil versiegelter Fläche am Grundstück und die Maßnahmen zur ökologischen Aufwertung des Außenbereichs.',
+      lp_req:{1:'Grundstücksanalyse, Bestandsversiegelung und Planungsziele für Entsiegelung.',3:'Nachweis geplanter Versiegelung und Begrünungsmaßnahmen im Entwurf.'},
+      options: qn('Versiegelung < 40 % Grundstücksfläche','Versiegelung 40–55 %','Versiegelung 55–70 %','Versiegelung 70–85 %') },
+    // ── Area 2 — Ökonomische Qualität ──────────────────────────────────────
+    { code:'2.1.1', area:2, name_de:'Gebäudebezogene Kosten im Lebenszyklus',  name_sub:'Life Cycle Costs',                    bz:3, lps:[2,3,5,8], maxPunkte:MP,
+      assigned:null,
+      description:'Bewertet die Gesamtkosten des Gebäudes über den Lebenszyklus (Herstellung, Betrieb, Instandhaltung, Rückbau) im Vergleich zum Referenzgebäude.',
+      lp_req:{2:'Erste LCC-Abschätzung auf Basis Vorentwurf.',3:'Detaillierte LCC-Berechnung nach GEFMA 200 oder vergleichbarer Methodik.',5:'Aktualisierung mit Ausführungsplanung.',8:'Endabgleich mit Ist-Kosten.'},
+      options: qn('LCC < 80 % des Referenzgebäudes','LCC 80–90 %','LCC 90–100 %','LCC 100–110 %') },
+    { code:'2.2.1', area:2, name_de:'Flächeneffizienz',                        name_sub:'Space Efficiency (NUF/BGF)',           bz:2, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Verhältnis Nutzungsfläche (NUF 1-6) zu Brutto-Grundfläche (BGF). Ziel: hoher Anteil nutzbarer Fläche, minimierte Verkehrs- und Konstruktionsflächen.',
+      lp_req:{3:'Flächenberechnung nach DIN 277 mit NF/BGF-Nachweis.',5:'Überprüfung der Flächenbilanz mit Ausführungsplanung.'},
+      options: qn('NF/BGF > 0,65 — sehr effizienter Grundriss','NF/BGF > 0,58','NF/BGF > 0,50','NF/BGF > 0,42') },
+    { code:'2.2.2', area:2, name_de:'Anpassungsfähigkeit',                     name_sub:'Long-term Adaptability and Flexibility',bz:2, lps:[3,5],   maxPunkte:MP,
+      assigned:null,
+      description:'Fähigkeit des Gebäudes zur Umnutzung: Geometrie (Raumhöhen, Gebäudetiefe), Grundrisse (Nutzungseinheiten <400m²), Konstruktion, TGA-Flexibilität (BUS-System, flexible Schächte).',
+      lp_req:{3:'Bewertungsliste Umnutzungsfähigkeit, technisches Konzept TGA-Flexibilität.',5:'Überprüfung Ausführungsplanung auf Umnutzungsmaßnahmen.'},
+      options: qn('Hohe Anpassungsfähigkeit, alle Maßnahmen umgesetzt','Mittlere Anpassungsfähigkeit, wesentliche Maßnahmen','Grundlegende Maßnahmen, Teilerfüllung','Geringe Anpassungsfähigkeit') },
+    // ── Area 3 — Soziokulturelle Qualität ──────────────────────────────────
+    { code:'3.1.1', area:3, name_de:'Thermischer Komfort im Winter',           name_sub:'Thermal Comfort in Winter',           bz:2, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Operative Raumtemperatur, Strahlungsasymmetrie (kalte Flächen), Fußbodentemperatur, Zugluft nach DIN EN 15251 Kategorie II.',
+      lp_req:{3:'Thermische Simulation Winter, Nachweis DIN 15251 Kategorie II.',5:'Überprüfung Ausführungsplanung Heizung, Regelungskonzept.',8:'Inbetriebnahmeprotokoll Heizungsregelung, Nutzerbefragung.'},
+      options: qn3('Op. Temp. ≥ 21 °C, Strahlungsasymmetrie < 2 K','DIN 15251 Kategorie II','GEG-Mindestanforderungen') },
+    { code:'3.1.3', area:3, name_de:'Innenraumlufthygiene',                    name_sub:'Indoor Air Quality',                  bz:2, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Lüftungskonzept mit ausreichendem Außenluftvolumenstrom, Schadstoffemissionen aus Baumaterialien (VOC, Formaldehyd nach AgBB), CO₂-Konzentration <1000 ppm.',
+      lp_req:{3:'Luftmengenberechnung DIN EN 15251, Nachweis VOC-Klassen der Materialien.',5:'Überprüfung Lüftungsanlage Ausführungsplanung, Materialnachweis.',8:'Raumluftmessungen nach Fertigstellung (VOC, CO₂, Formaldehyd).'},
+      options: qn('CO₂ < 600 ppm, VOC-Klasse A+','CO₂ < 800 ppm, VOC-Klasse A','CO₂ < 1000 ppm, emissionsarm','CO₂ < 1200 ppm, MBO-Anforderungen') },
+    { code:'3.1.4', area:3, name_de:'Akustischer Komfort',                     name_sub:'Acoustic Comfort',                    bz:2, lps:[3,5,8],   maxPunkte:MP,
+      assigned:{initials:'TM',name:'Thomas Meyer',role:'Spezialist · Bauphysik'},
+      description:'Schallschutz zwischen Nutzungseinheiten und gegen Außenlärm, Nachhallzeit in Büroräumen und Besprechungsräumen, haustechnische Geräusche nach DIN 4109 und DIN 18041.',
+      lp_req:{3:'Nachweis Raumakustik DIN 18041, Schallschutz DIN 4109, TGA-Schallpegelnachweis.',5:'Überprüfung schallschutzkritischer Anschlussdetails.',8:'Nachhallzeitmessung und Schallpegelprüfung nach Fertigstellung.'},
+      options: qn('DIN 18041 Kat. A, Nachhallzeit ≤ 0,6 s','DIN 18041 Kat. B','Über DIN 4109 Mindestanforderungen','DIN 4109 Mindestanforderungen') },
+    { code:'3.1.5', area:3, name_de:'Visueller Komfort',                       name_sub:'Visual Comfort and Daylighting',      bz:2, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Tageslichtversorgung (Tageslichtquotient ≥2% für 60% der Fläche), Blendschutz, Sonnenschutz, Kunstlicht-Beleuchtungsstärke nach DIN EN 12464 und DIN EN 17037.',
+      lp_req:{3:'Tageslichtberechnung DIN EN 17037, Nachweis Sonnenschutzsystem.',5:'Überprüfung Sonnenschutz Ausführungsplanung, Beleuchtungskonzept.'},
+      options: qn('Tageslichtquotient ≥ 3,5 %, Ausblick und Blendschutz','TQ ≥ 2,5 %, Blendschutz vorhanden','TQ ≥ 1,5 %','Grundanforderungen EltBauVO') },
+    { code:'3.1.6', area:3, name_de:'Einflussnahmemöglichkeiten durch Nutzer', name_sub:'User Control of Comfort Parameters',  bz:1, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Individuelle Steuerungsmöglichkeiten: Raumtemperatur, Lüftung (Fensterlüftung oder dezentrale Einheit), Beleuchtung, Sonnenschutz.',
+      lp_req:{3:'Nachweis Steuerungsmöglichkeiten je Nutzungsbereich, Gebäudeautomationsplan.',5:'Überprüfung Regelungstechnik Ausführungsplanung.'},
+      options: qn3('Nutzersteuerung Licht/Luft/Wärme in allen Bereichen','Steuerung in wesentlichen Bereichen','Grundlegende Einflussnahme möglich') },
+    { code:'3.1.7', area:3, name_de:'Aufenthaltsqualitäten im Außenbereich',   name_sub:'Outdoor Space Quality for Building Users',bz:1, lps:[3,5],  maxPunkte:MP,
+      assigned:null,
+      description:'Qualität von Terrassen, Pausenhöfen, Grünflächen: Begrünung, Sitzgelegenheiten, Witterungsschutz, Barrierefreiheit, Erreichbarkeit vom Arbeitsplatz.',
+      lp_req:{3:'Freiraumplanung mit Bepflanzungskonzept, Sitzmöglichkeiten, Wegeführung.',5:'Überprüfung Ausführungsplanung Außenanlagen.'},
+      options: qn3('Hochwertige Außenanlage mit Naherholung und Biodiversität','Funktionale Anlage mit Aufenthaltsqualität','Grundlegende Außenanlage geplant') },
+    { code:'3.1.8', area:3, name_de:'Sicherheit und Störfallrisiken',          name_sub:'Safety and Hazard Prevention',        bz:1, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Einbruchschutz (Widerstandsklassen DIN EN 1627), Absturzsicherung, Sicherheitsbeleuchtung, Maßnahmen gegen Störfallrisiken.',
+      lp_req:{3:'Sicherheitskonzept im Entwurf: Fluchtwege, Barrierefreiheit, Einbruchschutz.',5:'Überprüfung Ausführungsplanung sicherheitsrelevanter Maßnahmen.'},
+      options: qn3('Umfassendes Sicherheitskonzept, alle Risiken adressiert','Wesentliche Sicherheitsmaßnahmen umgesetzt','Grundanforderungen LBauO erfüllt') },
+    { code:'3.2.1', area:3, name_de:'Barrierefreiheit',                        name_sub:'Accessibility (Barrier-free Design)', bz:2, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Stufenlose Erreichbarkeit aller Bereiche, rollstuhlgerechte Ausstattung (Sanitär, Aufzüge), taktile Leitsysteme nach DIN 18040-1.',
+      lp_req:{3:'Barrierefreiheits-Nachweis DIN 18040, Grundrisse mit Barrierefreiheits-Check.',5:'Überprüfung Ausführungsplanung auf barrierefreie Details.'},
+      options: qn3('DIN 18040 vollständig, alle Nutzerbereiche','Teilweise barrierefrei, wesentliche Bereiche','Mindestanforderungen LBauO') },
+    { code:'3.2.4', area:3, name_de:'Zugänglichkeit',                          name_sub:'Universal Accessibility',             bz:1, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Allgemeine Erreichbarkeit und Orientierung: Eingangszone, Beschilderung, Leitsysteme, Adressbildung, öffentliche Zugänglichkeit.',
+      lp_req:{3:'Orientierungs- und Leitsystemkonzept, Grundriss Eingangsbereich.',5:'Überprüfung Ausführungsplanung Leitsystem und Beschilderung.'},
+      options: qn3('Optimales Leitsystem, alle Nutzergruppen berücksichtigt','Gutes Leitsystem in wesentlichen Bereichen','Grundlegendes Orientierungssystem vorhanden') },
+    { code:'3.2.5', area:3, name_de:'Mobilitätsinfrastruktur',                 name_sub:'Sustainable Mobility Infrastructure', bz:1, lps:[1,3],     maxPunkte:MP,
+      assigned:null,
+      description:'Fahrradabstellanlagen (überdacht, abschließbar, Anzahl), Ladestationen E-Mobilität (PKW + Fahrrad), Carsharing, ÖPNV-Anbindung.',
+      lp_req:{1:'Mobilitätskonzept: ÖPNV-Anbindung, Fahrrad- und E-Mobilitätsplanung.',3:'Nachweis Stellplätze und Ladeinfrastruktur im Entwurf.'},
+      options: qn3('E-Ladepunkte, Fahrradstellplätze und ÖPNV optimal','Grundlegende Fahrrad- und E-Infrastruktur','Mindestanforderungen, Fahrradabstellplätze') },
+    { code:'3.3.1', area:3, name_de:'Gestalterische und städtebauliche Qualität',name_sub:'Architectural and Urban Design Quality',bz:2, lps:[3,5],  maxPunkte:MP,
+      assigned:null,
+      description:'Sicherung der Gestaltungsqualität durch Wettbewerbsverfahren (RPW 2013), Qualitätssicherungsmaßnahmen, Einbindung in städtebaulichen Kontext.',
+      lp_req:{3:'Städtebauliche Einbindungsstudie, Nachweis des Planungsverfahrens.',5:'Überprüfung Ausführungsplanung Fassade und Außenraum.'},
+      options: qn('Wettbewerb oder qualifiziertes Verfahren','Qualifiziertes Entwurfsverfahren, gute Einpassung','Planerauswahl mit Qualitätskriterien','Standardplanung, Grundanforderungen') },
+    { code:'3.3.2', area:3, name_de:'Kunst am Bau',                            name_sub:'Art in Federal Buildings',            bz:1, lps:[5,8],     maxPunkte:MP,
+      assigned:null,
+      description:'Einbindung von Kunstwerken in Bundesbauten: Wettbewerb nach RRB, Budget (1-2% der Bausumme), Integration in Architektur.',
+      lp_req:{5:'Kunstwettbewerb ausgeschrieben, Konzept und Budget festgelegt.',8:'Ausführungsdokumentation des Kunstwerks, Abnahmeprotokoll.'},
+      options: qn3('Kunstwettbewerb durchgeführt, Werk realisiert','Kunst geplant, Wettbewerb ausgeschrieben','Kunstkonzept vorhanden') },
+    // ── Area 4 — Technische Qualität ───────────────────────────────────────
+    { code:'4.1.1', area:4, name_de:'Schallschutz',                            name_sub:'Sound Insulation',                    bz:2, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Luft- und Trittschallschutz zwischen Nutzungseinheiten und gegen Außenlärm nach DIN 4109, erhöhter Schallschutz nach VDI 4100.',
+      lp_req:{3:'Schallschutznachweis DIN 4109, Nachweis erhöhter Schallschutz.',5:'Überprüfung schallschutzkritischer Anschlussdetails.',8:'Schallschutzmessungen nach Fertigstellung.'},
+      options: qn3('Erhöhter Schallschutz DIN 4109 Bbl. 2 Empfehlung','Erhöhter Schallschutz DIN 4109 Bbl. 1','Mindestanforderungen DIN 4109') },
+    { code:'4.1.2', area:4, name_de:'Wärme- und Tauwasserschutz',              name_sub:'Hygrothermal Quality',                bz:1, lps:[3,5,8],   maxPunkte:MP,
+      assigned:null,
+      description:'Winterlicher Wärmeschutz (U-Werte, Wärmebrücken), sommerlicher Wärmeschutz (Sonneneintragskennwert), Tauwasserfreiheit nach DIN 4108.',
+      lp_req:{3:'Energetischer Nachweis GEG, Wärmebrückennachweis DIN 4108 Bbl. 2.',5:'Überprüfung Ausführungsdetails auf Wärmebrücken und Luftdichtheit.',8:'Luftdichtheitstest n50, Thermografieauswertung.'},
+      options: qn('U-Werte < 50 % GEG, Wärmebrücken minimiert','U-Werte 50–70 % GEG, optimierte Wärmebrücken','U-Werte 70–85 % GEG','GEG-Mindestanforderungen') },
+    { code:'4.1.3', area:4, name_de:'Reinigung und Instandhaltungsfreundlichkeit',name_sub:'Ease of Cleaning and Maintenance', bz:1, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Reinigungsfreundlichkeit von Fassaden (Zugang, Materialwahl), Böden, Sanitäranlagen, Fenstern. Zugänglichkeit für Wartungsarbeiten.',
+      lp_req:{3:'Reinigungs- und Wartungskonzept, Nachweis Fassadenzugang.',5:'Überprüfung Ausführungsplanung auf Wartungszugänglichkeit.'},
+      options: qn3('Optimales Reinigungs-/Wartungskonzept, alle Bereiche','Wesentliche Bereiche berücksichtigt','Grundlegende Maßnahmen vorhanden') },
+    { code:'4.1.4', area:4, name_de:'Rückbau, Trennung und Verwertung',        name_sub:'Deconstruction, Separation and Recycling',bz:1, lps:[3,5], maxPunkte:MP,
+      assigned:null,
+      description:'Lösbare Verbindungen, Trennbarkeit von Materialien, Verzicht auf Verbundstoffe, Recyclingfähigkeit der Hauptbaustoffe, Rückbaukonzept.',
+      lp_req:{3:'Rückbaukonzept: Kennzeichnung lösbarer Verbindungen, sortenreine Trennbarkeit.',5:'Überprüfung Ausführungsplanung auf Rückbaufreundlichkeit der Anschlussdetails.'},
+      options: qn3('Rückbaukonzept, > 90 % sortenrein trennbar','Rückbauplanung, 70–90 % trennbar','Grundlegende Rückbauüberlegungen') },
+    { code:'4.1.5', area:4, name_de:'Widerstandsfähigkeit gegen Naturgefahren', name_sub:'Resilience Against Natural Hazards', bz:1, lps:[1,3],     maxPunkte:MP,
+      assigned:null,
+      description:'Standortbezogene Analyse der Naturgefahren (Hochwasser, Wind, Schnee, Erdbeben) und bauliche Schutzmaßnahmen.',
+      lp_req:{1:'Naturgefahren-Analyse Standort: Hochwasserkarte, Windzone, Erdbebenzone.',3:'Nachweis bauliche Schutzmaßnahmen im Entwurf.'},
+      options: qn3('Umfassende Risikoanalyse und alle Schutzmaßnahmen','Wesentliche Risiken analysiert und adressiert','Grundlegende Naturgefahrenbetrachtung') },
+    { code:'4.1.6', area:4, name_de:'Bedienungs- und Instandhaltungsfreundlichkeit der TGA',name_sub:'TGA Operability and Maintainability',bz:1, lps:[3,5,8], maxPunkte:MP,
+      assigned:null,
+      description:'Strukturierte Beschriftung aller TGA-Komponenten, Betriebshandbuch, CAFM-System, Gebäudeautomation mit Monitoring, Zugänglichkeit Wartungsschächte.',
+      lp_req:{3:'TGA-Betriebshandbuch (Entwurf), CAFM-Konzept, Gebäudeautomationsplan.',5:'Überprüfung Ausführungsplanung: Wartungsschächte, Beschriftungskonzept.',8:'Vollständiges Betriebshandbuch, Einweisung Haustechnikpersonal.'},
+      options: qn3('CAFM, Monitoring, vollständiges Betriebshandbuch','CAFM und wesentliche Betriebsdokumentation','Grundlegende Instandhaltungsplanung') },
+    // ── Area 5 — Prozessqualität ────────────────────────────────────────────
+    { code:'5.1.1', area:5, name_de:'Projektvorbereitung',                     name_sub:'Project Preparation Quality',         bz:1, lps:[1,2],     maxPunkte:MP,
+      assigned:null,
+      description:'Qualität der Bedarfsplanung nach DIN 18205: Nutzeranforderungen, Raumprogramm, Nachhaltigkeitsziele, Projekthandbuch.',
+      lp_req:{1:'Bedarfsplanung DIN 18205, Nachhaltigkeitsziele festgelegt.',2:'Überprüfung und Aktualisierung der Projektziele nach Vorplanung.'},
+      options: qn3('Vollständige Bedarfsplanung, Nachhaltigkeitsziele definiert','Wesentliche Projektgrundlagen dokumentiert','Grundlegende Projektvorbereitung vorhanden') },
+    { code:'5.1.2', area:5, name_de:'Integrale Planung',                       name_sub:'Integrated Design Process',           bz:1, lps:[1,2,3],   maxPunkte:MP,
+      assigned:null,
+      description:'Interdisziplinäre Zusammenarbeit aller Fachplaner von Beginn an, Koordinationsrunden, gemeinsame Simulationen, BIM-Einsatz.',
+      lp_req:{1:'Nachweis geplanter Projektteilnehmer und Kommunikationsstruktur.',2:'Dokumentation Planungsmeetings mit allen Fachplanern.',3:'Entscheidungsdokumentation interdisziplinärer Meetings.'},
+      options: qn3('Alle Fachplaner früh eingebunden, lückenlose Dokumentation','Wesentliche Fachplaner ab LP2 integriert','Fachplaner-Koordination vorhanden') },
+    { code:'5.1.3', area:5, name_de:'Komplexität und Optimierung der Planung', name_sub:'Design Complexity and Optimization',  bz:1, lps:[3,5],     maxPunkte:MP,
+      assigned:null,
+      description:'Variantenuntersuchungen, Simulationen (Energie, Tageslicht, Raumakustik, CFD), Optimierungsschleifen, Nachhaltigkeitszertifizierung als Planungsziel.',
+      lp_req:{3:'Variantenvergleich wesentlicher Systeme, Simulationsergebnisse ausgewertet.',5:'Überprüfung: Wurde der optimierte Ansatz umgesetzt?'},
+      options: qn3('Variantenuntersuchung, Workshops, Simulation','Variantenvergleich wesentlicher Systeme','Grundlegende Planungsoptimierung') },
+    { code:'5.1.4', area:5, name_de:'Ausschreibung und Vergabe',               name_sub:'Tendering and Award with Sustainability Criteria',bz:1, lps:[6,7], maxPunkte:MP,
+      assigned:null,
+      description:'Berücksichtigung von Nachhaltigkeitskriterien in Ausschreibungsunterlagen: ökologische Produktanforderungen, soziale Kriterien, lebenszyklusorientierte Vergabe.',
+      lp_req:{6:'Nachhaltigkeitsanforderungen in Ausschreibungsunterlagen vollständig integriert.',7:'Kontrolle bei Vergabe: Bieter-Nachweise geprüft, Vergabe dokumentiert.'},
+      options: qn3('Detaillierte Nachhaltigkeitsanforderungen in Ausschreibung','Wesentliche Nachhaltigkeitskriterien im LV','Grundlegende Qualitätsanforderungen vorhanden') },
+    { code:'5.1.5', area:5, name_de:'Voraussetzungen für optimale Bewirtschaftung',name_sub:'Conditions for Optimal Building Operation',bz:1, lps:[5,8], maxPunkte:MP,
+      assigned:null,
+      description:'Maßnahmen für optimalen Gebäudebetrieb: Betriebshandbuch, Nutzerhandbuch, Schulungskonzept, Energiemonitoring, Messkonzept.',
+      lp_req:{5:'Betriebshandbuch (Entwurf), Monitoringkonzept, Schulungsplan erstellt.',8:'Vollständiges Betriebshandbuch abgeliefert, Nutzerschulungen dokumentiert.'},
+      options: qn3('Vollständiges Betriebshandbuch, Monitoring, Schulungen','Wesentliche Betriebsdokumentation vorhanden','Grundlegende Betriebsplanung erstellt') },
+    { code:'5.2.1', area:5, name_de:'Baustelle / Bauprozess',                  name_sub:'Sustainable Construction Site Management',bz:1, lps:[7,8],  maxPunkte:MP,
+      assigned:null,
+      description:'Nachhaltiges Baustellenmanagement: Umweltschutzplan (Lärm, Staub, Abwasser), Abfallkonzept (Trennung, Recycling), Ressourceneffizienz, Arbeitssicherheit.',
+      lp_req:{7:'Umweltmanagementplan Baustelle dokumentiert und umgesetzt.',8:'Nachweis: Abfallmengen, Recyclingquoten, Lärmprotokoll.'},
+      options: qn3('Umweltmanagement, Lärmminimierung, Kreislaufwirtschaft','Wesentliche Umweltmaßnahmen auf Baustelle','Grundlegende Baustellenordnung eingehalten') },
+    { code:'5.2.2', area:5, name_de:'Qualitätssicherung der Bauausführung',    name_sub:'Construction Quality Assurance',      bz:1, lps:[8],       maxPunkte:MP,
+      assigned:null,
+      description:'Qualitätsprüfungen während der Bauausführung: Kontrolle der Ausführung gemäß Planung, Dokumentation von Abweichungen und Mängelbeseitigung, Abnahmen.',
+      lp_req:{8:'Abnahmeprotokolle vollständig, alle Mängel behoben, Qualitätssicherungsbericht abgeliefert.'},
+      options: qn3('Unabhängige Qualitätssicherung, alle Gewerke','Qualitätskontrollen wesentlicher Gewerke','Grundlegende Abnahme und Kontrolle') },
+    { code:'5.2.3', area:5, name_de:'Systematische Inbetriebnahme',            name_sub:'Systematic Commissioning',            bz:1, lps:[8],       maxPunkte:MP,
+      assigned:null,
+      description:'Funktionale Prüfung aller Gebäudesysteme vor Übergabe: Regelungsoptimierung, Messkampagnen, Dokumentation der Inbetriebnahme, Übergabeprotokoll.',
+      lp_req:{8:'Inbetriebnahmeprotokoll aller haustechnischen Anlagen, Nutzerhandbuch, Monitoring-Konzept.'},
+      options: qn3('Inbetriebnahmekonzept, Einweisung, Monitoring','Inbetriebnahme wesentlicher Systeme begleitet','Grundlegende Einweisung und Inbetriebnahme') },
+    // ── Area 6 — Standortmerkmale (BZ=0, keine Bewertungsstufen) ──────────
+    { code:'6.1.1', area:6, name_de:'Risiken am Mikrostandort',                name_sub:'Microsite Risks',                     bz:0, lps:[1], maxPunkte:0,
+      assigned:null, description:'Altlasten, Hochwassergefährdung (HWGK), Lärm (Lärmkartierung), Luftbelastung (NO₂, PM10), elektromagnetische Felder, Radon.',
+      lp_req:{1:'Standortrisikoprofil: Altlastenkataster, Hochwasserkarte, Lärmkartierung.'}, options:[] },
+    { code:'6.1.2', area:6, name_de:'Verhältnisse am Mikrostandort',           name_sub:'Microsite Conditions',                bz:0, lps:[1], maxPunkte:0,
+      assigned:null, description:'Natürliche Verhältnisse: Besonnung (Verschattungsanalyse), Windverhältnisse, Bodenverhältnisse (Tragfähigkeit, Grundwasser).',
+      lp_req:{1:'Standortanalyse mit Bodengutachten, Grundwasserstand, Kleinklimauntersuchung.'}, options:[] },
+    { code:'6.1.3', area:6, name_de:'Quartiersmerkmale',                       name_sub:'Neighborhood Characteristics',        bz:0, lps:[1], maxPunkte:0,
+      assigned:null, description:'Nutzungsmischung im Quartier, öffentliche Räume, soziale Infrastruktur, Grünversorgung, Stadtklima.',
+      lp_req:{1:'Stadtplan mit Nutzungsanalyse, Grünflächennachweis, Sozialraumanalyse.'}, options:[] },
+    { code:'6.1.4', area:6, name_de:'Verkehrsanbindung',                       name_sub:'Transport Connectivity',              bz:0, lps:[1], maxPunkte:0,
+      assigned:null, description:'Entfernung zu ÖPNV-Haltestellen (Bus, U-Bahn, S-Bahn, Bahn), Taktfrequenz, Vernetzung verschiedener Verkehrsträger.',
+      lp_req:{1:'ÖPNV-Erreichbarkeitsanalyse, Fahrplan-Dokumentation, Fußweganalyse zu Haltestellen.'}, options:[] },
+    { code:'6.1.5', area:6, name_de:'Nähe zu nutzungsrelevanten Einrichtungen',name_sub:'Proximity to Relevant Services',      bz:0, lps:[1], maxPunkte:0,
+      assigned:null, description:'Entfernung zu: Gastronomie, Einzelhandel, Post/Bank, Sport/Fitness, Kinderbetreuung, Grünflächen (fußläufig erreichbar).',
+      lp_req:{1:'Nahversorgungsanalyse (Radius 500m), Karte mit Einrichtungen.'}, options:[] },
+    { code:'6.1.6', area:6, name_de:'Anliegende Medien / Erschließung',        name_sub:'Utility Infrastructure and Services', bz:0, lps:[1], maxPunkte:0,
+      assigned:null, description:'Verfügbarkeit: Fernwärme/-kälte (Anschlusskosten, CO₂-Faktor), Erdgas, Strom, Glasfaser. Potenzial für erneuerbare Energien am Standort.',
+      lp_req:{1:'Medienanfrage Versorger, Fernwärme-Anschlusskarte, Netzkarte Strom.'}, options:[] },
+  ];
+
+  const initEvals = (c) => {
+    const ev = {};
+    c.lps.forEach(lp => { ev[lp] = { score: 0, notes: '', status: 'not_started', mark_done: false }; });
+    return ev;
+  };
+
+  return {
+    criteriaDefinitions: D,
+    currentIndex: (() => { const c = new URLSearchParams(location.search).get('code'); const i = D.findIndex(x => x.code === c); return i >= 0 ? i : 0; })(),
+    currentLP: 3,
+    activeTab: 'evaluations',
+    expandedLP: (() => { const c = new URLSearchParams(location.search).get('code'); const i = D.findIndex(x => x.code === c); const lps = D[i >= 0 ? i : 0].lps; return lps.includes(3) ? 3 : lps[0]; })(),
+    activeLpDocs: (() => { const c = new URLSearchParams(location.search).get('code'); const i = D.findIndex(x => x.code === c); const lps = D[i >= 0 ? i : 0].lps; return lps.includes(3) ? 3 : lps[0]; })(),
+    commentType: 'internal',
+    showDesc: false,
+    overallStatus: 'in_progress',
+    selectedOptionByLP: {},
+
+    evals: (() => { const c = new URLSearchParams(location.search).get('code'); const i = D.findIndex(x => x.code === c); return initEvals(D[i >= 0 ? i : 0]); })(),
+    evalsMap: {},
+
+    form: { method:'din15978', gwp_value:'18.3', period:'50', datasource:'oekobaudat', software:'OneClick LCA', phases:['A1-A3','B1','B6','C3','C4'], remarks:'' },
+    lcaPhases: [
+      { code:'A1-A3', label:'Herstellung' }, { code:'A4', label:'Transport' }, { code:'A5', label:'Einbau' },
+      { code:'B1', label:'Nutzung' }, { code:'B4', label:'Ersatz' }, { code:'B6', label:'Betriebsenergie' },
+      { code:'C1-C2', label:'Rückbau/Transport' }, { code:'C3', label:'Abfallbehandlung' }, { code:'C4', label:'Entsorgung' },
+    ],
+
+    currentCriteria() { return this.criteriaDefinitions[this.currentIndex]; },
+
+    navigateTo(idx) {
+      this.evalsMap[this.currentCriteria().code] = JSON.parse(JSON.stringify(this.evals));
+      this.currentIndex = idx;
+      const c = this.currentCriteria();
+      this.evals = this.evalsMap[c.code] || initEvals(c);
+      if (!this.evalsMap[c.code]) this.evalsMap[c.code] = this.evals;
+      this.expandedLP = c.lps.includes(this.currentLP) ? this.currentLP : c.lps[0];
+      this.activeLpDocs = c.lps[0] || 1;
+      this.activeTab = 'evaluations';
+      this.selectedOptionByLP = {};
+      this.showDesc = false;
+      this.$nextTick(() => lucide.createIcons());
+    },
+    goNext() { if (this.currentIndex < this.criteriaDefinitions.length - 1) this.navigateTo(this.currentIndex + 1); },
+    goPrev() { if (this.currentIndex > 0) this.navigateTo(this.currentIndex - 1); },
+
+    areaLabel(a) { return ['','Ökologische Qualität','Ökonomische Qualität','Soziokulturelle Qualität','Technische Qualität','Prozessqualität','Standortmerkmale'][a] || ''; },
+    areaColor(a) {
+      return ({1:'bg-green-50 text-green-700 border-green-200',2:'bg-blue-50 text-blue-700 border-blue-200',3:'bg-violet-50 text-violet-700 border-violet-200',4:'bg-orange-50 text-orange-700 border-orange-200',5:'bg-teal-50 text-teal-700 border-teal-200',6:'bg-rose-50 text-rose-700 border-rose-200'})[a] || '';
+    },
+    bzImportance(bz) { return {3:'Bedeutungszahl hoch',2:'Bedeutungszahl mittel',1:'Bedeutungszahl niedrig',0:'Informationskriterium'}[bz] || ''; },
+    bzColor(bz) { return {3:'bg-red-100 text-red-700',2:'bg-orange-100 text-orange-700',1:'bg-slate-100 text-slate-600',0:'bg-slate-50 text-slate-400'}[bz] || ''; },
+
+    togglePhase(code) { const idx = this.form.phases.indexOf(code); if (idx === -1) this.form.phases.push(code); else this.form.phases.splice(idx, 1); },
+    toggleLpExpand(lp) { this.expandedLP = this.expandedLP === lp ? null : lp; },
+
+    pickOption(opt) {
+      const targetLP = this.expandedLP || this.currentLP;
+      if (!this.evals[targetLP]) return;
+      this.evals[targetLP].score = Math.round(opt.punkte / this.currentCriteria().maxPunkte * 100);
+      this.selectedOptionByLP[targetLP] = opt.level;
+    },
+    activeOption(lp) {
+      const c = this.currentCriteria();
+      if (!this.evals[lp] || !c.options.length) return null;
+      const pct = this.evals[lp].score;
+      return c.options.find(o => Math.round(o.punkte / c.maxPunkte * 100) === pct)?.level || null;
+    },
+
+    getStatus(lp) {
+      if (!this.currentCriteria().lps.includes(lp)) return 'not_applicable';
+      return (this.evals[lp] || {}).status || 'not_started';
+    },
+    lpMiniStyle(lp) {
+      if (!this.currentCriteria().lps.includes(lp)) return 'border-slate-200 bg-slate-100 text-slate-300';
+      const s = this.getStatus(lp);
+      if (s === 'completed') return 'border-green-400 bg-green-500 text-white';
+      if (lp === this.currentLP) return 'border-blue-500 bg-blue-600 text-white ring-2 ring-blue-200';
+      return 'border-slate-200 bg-white text-slate-400';
+    },
+    lpBadgeStyle(lp) {
+      const s = (this.evals[lp] || {}).status;
+      if (s === 'completed') return 'border-green-500 bg-green-500 text-white';
+      if (lp === this.currentLP) return 'border-blue-500 bg-blue-50 text-blue-700';
+      return 'border-slate-200 bg-white text-slate-400';
+    },
+    lpName(lp) { return ['','Grundlagenermittlung','Vorplanung','Entwurfsplanung','Genehmigungsplanung','Ausführungsplanung','Vorbereitung Vergabe','Mitwirkung Vergabe','Objektüberwachung'][lp] || ''; },
+    lpRequirement(lp) { return this.currentCriteria().lp_req?.[lp] || 'Anforderungen für diese LP nicht definiert.'; },
+    scoreBarColor(v) { if (v >= 80) return 'bg-green-500'; if (v >= 50) return 'bg-amber-400'; return 'bg-red-400'; },
+    scoreTextColor(v) { if (v >= 80) return 'text-green-600'; if (v >= 50) return 'text-amber-600'; return 'text-red-500'; },
+  };
+}
+
+document.addEventListener('alpine:initialized', () => lucide.createIcons());
+</script>
+</body>
+</html>

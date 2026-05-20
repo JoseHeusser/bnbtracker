@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Vollbericht</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; }
+      .page { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; page-break-after: always; }
+      .page:last-child { page-break-after: auto; }
+      .criterion-card { page-break-inside: avoid; }
+      .area-section-header { page-break-after: avoid; }
+    }
+    @page { size: A4 portrait; margin: 14mm 18mm; }
+    .page { width: 794px; margin: 0 auto 32px; background: white; box-shadow: 0 2px 16px rgba(0,0,0,.10); }
+    .cover-page { min-height: 1060px; display: flex; flex-direction: column; padding: 56px 56px 40px; }
+    .content-page { padding: 36px 44px; }
+    .lp-dot { display:inline-flex; width:22px; height:22px; border-radius:50%; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+    .flag-section { background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; padding:8px 12px; margin-top:6px; }
+  </style>
+</head>
+<body x-data="vollberichtApp()" class="bg-slate-300 min-h-screen">
+
+  <!-- ═══ EDIT TOOLBAR (no-print) ═══════════════════════════════════════ -->
+  <div class="no-print sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-[860px] mx-auto px-5 py-2.5 flex items-center gap-3">
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+          <span class="text-white font-bold text-xs">BNB</span>
+        </div>
+        <span class="font-semibold text-slate-800 text-sm">BNBtracker</span>
+        <span class="text-slate-300">/</span>
+        <span class="text-sm text-slate-500">Vollbericht</span>
+      </div>
+
+      <div class="flex items-center gap-2 ml-2">
+        <span class="text-xs text-slate-500 shrink-0">LP-Umfang:</span>
+        <select x-model.number="reportLP"
+          class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-green-500">
+          <option value="1">LP 1</option>
+          <option value="2">LP 1–2</option>
+          <option value="3">LP 1–3</option>
+          <option value="5">LP 1–5</option>
+          <option value="8">LP 1–8 (Gesamt)</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-1.5 ml-1">
+        <span class="text-xs text-slate-500 shrink-0">Deckblatt-Notiz:</span>
+        <input x-model="coverNote" type="text" placeholder="Kurze Anmerkung für das Deckblatt…"
+          class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs w-56 focus:outline-none focus:ring-1 focus:ring-green-500">
+      </div>
+
+      <div class="ml-auto flex items-center gap-2">
+        <span x-show="openCount > 0"
+          class="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-medium"
+          x-text="openCount + ' offene Punkte'"></span>
+        <a href="10-report-kurzbericht.html"
+          class="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+          ← Kurzbericht
+        </a>
+        <button onclick="window.print()"
+          class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+          </svg>
+          Drucken / PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="py-8 flex flex-col items-center">
+
+    <!-- ═══ PAGE 1: COVER (same as Kurzbericht) ══════════════════════════ -->
+    <div class="page">
+      <div class="cover-page">
+
+        <div class="flex items-center justify-between mb-12">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center shadow">
+              <span class="text-white font-bold text-sm">BNB</span>
+            </div>
+            <div>
+              <p class="font-bold text-slate-900 text-lg leading-tight">BNBtracker</p>
+              <p class="text-xs text-slate-400">Nachhaltigkeitszertifizierung</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-400">Bewertungssystem Nachhaltiges Bauen</p>
+            <p class="text-xs text-slate-400">Büro Neubau (BNB_BN)</p>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <span class="text-xs font-semibold uppercase tracking-widest text-green-600">Vollbericht</span>
+        </div>
+
+        <h1 class="text-3xl font-bold text-slate-900 leading-tight mb-2">
+          Neubau Bundesministerium Berlin
+        </h1>
+        <p class="text-slate-500 text-base mb-8">Invalidenstraße 44, 10115 Berlin</p>
+
+        <div class="grid grid-cols-2 gap-x-12 gap-y-3 mb-10 border-t border-slate-200 pt-6">
+          <div><span class="text-xs text-slate-400 block mb-0.5">Auftraggeber</span><span class="text-sm font-medium text-slate-800">BMVBS</span></div>
+          <div><span class="text-xs text-slate-400 block mb-0.5">Berichtsdatum</span><span class="text-sm font-medium text-slate-800">12. Mai 2026</span></div>
+          <div><span class="text-xs text-slate-400 block mb-0.5">LP-Umfang</span>
+            <span class="text-sm font-medium text-slate-800" x-text="'Leistungsphasen 1 – ' + reportLP"></span></div>
+          <div><span class="text-xs text-slate-400 block mb-0.5">Zertifizierungsziel</span>
+            <span class="text-sm font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">Silber ≥ 65 %</span></div>
+          <div><span class="text-xs text-slate-400 block mb-0.5">Koordinatorin</span><span class="text-sm font-medium text-slate-800">Julia Müller</span></div>
+          <div><span class="text-xs text-slate-400 block mb-0.5">Beratungsunternehmen</span><span class="text-sm font-medium text-slate-800">Nachhaltigkeitsberatung GmbH</span></div>
+          <div><span class="text-xs text-slate-400 block mb-0.5">Gebäudetyp</span><span class="text-sm font-medium text-slate-800">Büro Neubau</span></div>
+          <div><span class="text-xs text-slate-400 block mb-0.5">Nutzfläche</span><span class="text-sm font-medium text-slate-800">12.500 m²</span></div>
+        </div>
+
+        <div class="flex items-center gap-8 p-5 rounded-2xl bg-slate-50 border border-slate-200 mb-8">
+          <div class="text-center">
+            <p class="text-5xl font-bold text-slate-900" x-text="totalScore + ' %'"></p>
+            <p class="text-xs text-slate-500 mt-1">Gesamtbewertung LP 1–<span x-text="reportLP"></span></p>
+          </div>
+          <div class="w-px h-16 bg-slate-200"></div>
+          <div class="flex-1 space-y-2">
+            <template x-for="a in areas" :key="a.id">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500 w-4 shrink-0" x-text="'Q'+a.id"></span>
+                <div class="flex-1 h-1.5 bg-slate-200 rounded-full">
+                  <div class="h-full rounded-full" :class="areaBarColor(a.id)" :style="'width:'+a.score+'%'"></div>
+                </div>
+                <span class="text-xs font-semibold w-8 text-right tabular-nums"
+                  :class="a.id===6 ? 'text-slate-400':'text-slate-700'"
+                  x-text="a.id===6?'–':a.score+'%'"></span>
+              </div>
+            </template>
+          </div>
+          <div class="text-center shrink-0">
+            <div class="w-16 h-16 rounded-full flex items-center justify-center border-4 text-sm font-bold"
+              :class="certBadgeClass(totalScore)" x-text="certLevel(totalScore)"></div>
+            <p class="text-xs text-slate-400 mt-1">Zielniveau</p>
+          </div>
+        </div>
+
+        <div class="mb-8">
+          <p class="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">Anmerkungen</p>
+          <textarea x-model="coverNote" rows="4"
+            placeholder="Anmerkungen zum Bericht, offene Punkte, nächste Schritte…"
+            class="no-print w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-green-500 resize-none bg-slate-50"></textarea>
+          <p class="hidden print:block text-sm text-slate-700 leading-relaxed whitespace-pre-wrap"
+            x-text="coverNote || '—'"></p>
+        </div>
+
+        <div class="mt-auto pt-6 border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
+          <span>Erstellt mit BNBtracker · Nachhaltigkeitsberatung GmbH</span>
+          <span>12. Mai 2026</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PAGE 2+: FULL CRITERION DETAIL BY AREA ═══════════════════════ -->
+    <template x-for="area in [1,2,3,4,5,6]" :key="area">
+      <div class="page">
+        <div class="content-page">
+
+          <!-- Area section header -->
+          <div class="area-section-header flex items-center gap-3 mb-5 pb-3 border-b-2"
+            :class="areaBorder(area)">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+              :class="areaIconBg(area)" x-text="'Q'+area"></div>
+            <div class="flex-1">
+              <h2 class="font-bold text-slate-900 text-base" x-text="areaName(area)"></h2>
+              <p class="text-xs text-slate-400" x-text="area < 6 ? 'Gewichtung '+areaWeight(area)+' % · Score: '+areas[area-1].score+' %' : 'Informativ · nicht gewichtet'"></p>
+            </div>
+            <div x-show="area < 6" class="text-right">
+              <p class="text-2xl font-bold" :class="scoreTextColor(areas[area-1].score)"
+                x-text="areas[area-1].score + ' %'"></p>
+            </div>
+          </div>
+
+          <!-- Criterion cards -->
+          <div class="space-y-4">
+            <template x-for="c in criteriaByArea(area)" :key="c.code">
+              <div class="criterion-card border rounded-xl overflow-hidden"
+                :class="isOpen(c.code) ? 'border-amber-300' : 'border-slate-200'">
+
+                <!-- Criterion header -->
+                <div class="flex items-start gap-3 px-4 py-3"
+                  :class="isOpen(c.code) ? 'bg-amber-50' : 'bg-slate-50'">
+                  <span class="font-mono font-bold text-xs px-1.5 py-1 rounded shrink-0 mt-0.5"
+                    :class="areaCodeBadge(area)" x-text="c.code"></span>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-semibold text-sm text-slate-900" x-text="c.name_de"></span>
+                      <template x-if="c.bz > 0">
+                        <span class="text-xs px-1.5 py-0.5 rounded font-semibold" :class="bzBadge(c.bz)"
+                          x-text="'BZ '+c.bz"></span>
+                      </template>
+                      <template x-if="isOpen(c.code)">
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 font-semibold flex items-center gap-1">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          Offener Punkt
+                        </span>
+                      </template>
+                    </div>
+                    <!-- LP mini-timeline -->
+                    <div class="flex items-center gap-1 mt-1.5">
+                      <template x-for="lp in [1,2,3,5,8]" :key="lp">
+                        <div class="flex flex-col items-center gap-0.5" x-show="lp <= reportLP || lp<=2">
+                          <div class="lp-dot"
+                            :class="c.lps.includes(lp) ? lpDotStyle(c.code, lp) : 'bg-slate-100 text-slate-300'"
+                            x-text="lp"></div>
+                        </div>
+                      </template>
+                      <span class="ml-2 text-xs text-slate-400" x-text="'LP-Bezug: '+c.lps.filter(l=>l<=reportLP).join(', ')+(c.lps.some(l=>l>reportLP)?(' · ausstehend: '+c.lps.filter(l=>l>reportLP).join(', ')):'')"></span>
+                    </div>
+                  </div>
+                  <!-- Score -->
+                  <div class="shrink-0 text-right">
+                    <template x-if="getScore(c.code) > 0">
+                      <div>
+                        <p class="text-lg font-bold tabular-nums" :class="scoreTextColor(getScore(c.code))"
+                          x-text="getScore(c.code)+'%'"></p>
+                        <div class="w-16 h-1.5 bg-slate-200 rounded-full mt-1">
+                          <div class="h-full rounded-full" :class="areaBarColor(area)"
+                            :style="'width:'+getScore(c.code)+'%'"></div>
+                        </div>
+                      </div>
+                    </template>
+                    <template x-if="getScore(c.code) === 0">
+                      <span class="text-sm text-slate-300 font-medium">—</span>
+                    </template>
+                  </div>
+                  <!-- Open flag toggle (edit mode) -->
+                  <button @click="toggleOpen(c.code)"
+                    class="no-print shrink-0 w-6 h-6 rounded-md flex items-center justify-center transition-colors mt-0.5"
+                    :class="isOpen(c.code) ? 'bg-amber-400 text-white' : 'bg-slate-100 text-slate-300 hover:text-amber-500 hover:bg-amber-50'"
+                    :title="isOpen(c.code) ? 'Offenen Punkt schließen' : 'Als offenen Punkt markieren'">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                        d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Evaluations per LP -->
+                <div class="divide-y divide-slate-100">
+                  <template x-for="lp in c.lps.filter(l => l <= reportLP)" :key="lp">
+                    <div class="px-4 py-3 flex items-start gap-4"
+                      :class="lp === 3 && lp <= reportLP ? 'bg-blue-50/40' : ''">
+                      <!-- LP label -->
+                      <div class="shrink-0 flex flex-col items-center gap-1 w-12">
+                        <div class="lp-dot" :class="lpDotStyle(c.code, lp)" x-text="lp"></div>
+                        <span class="text-xs text-slate-400" x-text="lpShortName(lp)"></span>
+                      </div>
+                      <!-- Content -->
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class="text-xs font-semibold"
+                            :class="statusTextColor(getEvalStatus(c.code, lp))"
+                            x-text="statusLabel(getEvalStatus(c.code, lp))"></span>
+                          <template x-if="getScore(c.code) > 0 && getEvalStatus(c.code,lp) !== 'not_started'">
+                            <span class="text-xs text-slate-400 tabular-nums"
+                              x-text="getScore(c.code)+'%'"></span>
+                          </template>
+                        </div>
+                        <!-- Evaluation notes (if any) -->
+                        <template x-if="getEvalNote(c.code, lp)">
+                          <p class="text-xs text-slate-600 leading-relaxed" x-text="getEvalNote(c.code, lp)"></p>
+                        </template>
+                        <template x-if="!getEvalNote(c.code, lp) && getEvalStatus(c.code,lp) !== 'not_started'">
+                          <p class="text-xs text-slate-300 italic">Keine Notizen.</p>
+                        </template>
+                        <template x-if="getEvalStatus(c.code,lp) === 'not_started'">
+                          <p class="text-xs text-slate-300 italic">Noch nicht bewertet.</p>
+                        </template>
+                        <!-- Documents -->
+                        <template x-if="getDocs(c.code, lp).length > 0">
+                          <div class="mt-1.5 flex flex-wrap gap-1">
+                            <template x-for="doc in getDocs(c.code, lp)" :key="doc">
+                              <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded font-mono"
+                                x-text="doc"></span>
+                            </template>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- Future LPs (beyond report scope) -->
+                  <template x-if="c.lps.some(l => l > reportLP)">
+                    <div class="px-4 py-2 bg-slate-50/50">
+                      <span class="text-xs text-slate-300 italic"
+                        x-text="'Ausstehend: LP '+c.lps.filter(l=>l>reportLP).join(', ')"></span>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Open item note (edit + print) -->
+                <template x-if="isOpen(c.code)">
+                  <div class="px-4 pb-3">
+                    <div class="flag-section">
+                      <div class="flex items-start gap-2">
+                        <svg class="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <!-- edit mode -->
+                        <input type="text"
+                          :value="getOpenNote(c.code)"
+                          @input="setOpenNote(c.code, $event.target.value)"
+                          placeholder="Beschreibung des offenen Punktes…"
+                          class="no-print flex-1 bg-transparent border-none outline-none text-xs text-amber-800 placeholder:text-amber-300 font-medium">
+                        <!-- print mode (hidden in edit via no-print on input above) -->
+                        <p class="hidden print:block text-xs text-amber-800 font-medium"
+                          x-text="getOpenNote(c.code) || 'Offener Punkt — keine Beschreibung.'"></p>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+              </div>
+            </template>
+          </div>
+
+          <!-- Area footer -->
+          <div class="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+            <span x-text="criteriaByArea(area).length + ' Kriterien'"></span>
+            <span>BNBtracker · Nachhaltigkeitsberatung GmbH · 12. Mai 2026</span>
+          </div>
+
+        </div>
+      </div>
+    </template>
+
+  </div><!-- end pages wrapper -->
+
+  <!-- Mockup nav -->
+  <div class="no-print fixed bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full shadow-md px-5 py-1.5 flex items-center gap-3 z-50 text-xs">
+    <a href="10-report-kurzbericht.html" class="text-slate-400 hover:text-slate-700">← Kurzbericht</a>
+    <span class="text-slate-200">|</span>
+    <span class="text-slate-600 font-semibold">11 Vollbericht</span>
+  </div>
+
+<script>
+function vollberichtApp() {
+  return {
+    reportLP: 3,
+    coverNote: 'Vollständiger Bewertungsbericht für Leistungsphase 3. Enthält alle Kriterien mit Bewertungshistorie, Notizen und Dokumentenreferenzen.',
+
+    areas: [
+      { id:1, name:'Ökologische Qualität',        weight:22.5, score:72 },
+      { id:2, name:'Ökonomische Qualität',         weight:22.5, score:58 },
+      { id:3, name:'Soziokulturelle Qualität',     weight:22.5, score:62 },
+      { id:4, name:'Technische Qualität',          weight:22.5, score:45 },
+      { id:5, name:'Prozessqualität',              weight:10,   score:80 },
+      { id:6, name:'Standortmerkmale',             weight:0,    score:95 },
+    ],
+
+    get totalScore() {
+      const w = [0.225,0.225,0.225,0.225,0.10];
+      return Math.round(this.areas.slice(0,5).reduce((s,a,i) => s + a.score*w[i], 0));
+    },
+
+    get openCount() {
+      return Object.values(this.openFlags).filter(f => f.flagged).length;
+    },
+
+    openFlags: {
+      '1.1.1': { flagged: true,  note: 'Betriebsenergie-Werte aus HL-Planung noch ausstehend.' },
+      '2.1.1': { flagged: true,  note: 'Kostenberechnung nach DIN 276 fehlt.' },
+      '3.1.3': { flagged: true,  note: 'Luftwechselnachweis für LP3 nicht erbracht.' },
+    },
+
+    evalNotes: {
+      '1.1.1': { 3: 'LCA-Berechnung abgeschlossen (OneClick LCA). GWP: 18.3 kg CO₂-eq/m²a. Betriebsenergie-Werte aus HL-Planung noch ausstehend.' },
+      '1.1.2': { 3: 'ODP-Wert aus LCA-Berechnung übernommen. Erfüllungsgrad bestätigt.' },
+      '1.1.3': { 3: 'POCP aus LCA entnommen. Keine weiteren Maßnahmen erforderlich.' },
+      '1.2.1': { 3: 'Primärenergiebedarf nach EnEV berechnet: 48 kWh/m²a. Deutlich unter Referenzwert.' },
+      '1.2.4': { 1: 'Flächenversiegelung dokumentiert. Grünflächen gemäß Freiraumplanung.', 3: 'Keine Änderungen gegenüber LP1-Bewertung.' },
+      '2.1.1': { 2: 'Lebenszykluskosten nach DIN 18960 berechnet. Vorläufige Werte.', 3: 'Aktualisierung nach Kostenberechnung DIN 276 ausstehend.' },
+      '2.2.2': { 1: 'Marktanalyse erstellt.', 3: 'Bestätigung der Marktfähigkeit durch aktualisierte Lageanalyse.' },
+      '3.1.4': { 2: 'Raumakustik geprüft. DIN 18041 eingehalten.', 3: 'Schallmessungen liegen vor. Büros: Nachhallzeit 0.6s.' },
+      '3.2.4': { 2: 'Barrierefreiheit nach DIN 18040 geplant.', 3: 'Detailprüfung abgeschlossen. Alle Anforderungen erfüllt.' },
+      '5.1.1': { 1: 'Bedarfsplanung nach AHO abgeschlossen.', 2: 'Zieldefinition Nachhaltigkeit schriftlich festgehalten.' },
+      '5.1.2': { 1: 'Kick-Off mit allen Fachplanern durchgeführt.', 2: 'Workshops LP1+2 dokumentiert.', 3: 'Integraler Planungsprozess läuft. Nächster Workshop: Juni 2026.' },
+      '6.1.1': { 1: 'Keine erhöhten Umweltrisiken am Standort festgestellt.' },
+      '6.1.2': { 1: 'Gute Innenstadtlage. Keine Lärmbelastung über Grenzwert.' },
+      '6.1.3': { 1: 'S-Bahn 200m, U-Bahn 350m. ÖPNV-Anbindung ausgezeichnet.' },
+    },
+
+    docs: {
+      '1.1.1': { 3: ['LCA-Berechnung_LP3_v2.pdf', 'Ökobilanz_Materialien.xlsx'] },
+      '1.2.1': { 3: ['EnEV-Nachweis_LP3.pdf'] },
+      '2.1.1': { 2: ['LZK-Berechnung_vorläufig.xlsx'], 3: ['LZK_Update_LP3.xlsx'] },
+      '3.1.4': { 3: ['Raumakustik_LP3_Bericht.pdf'] },
+      '3.2.4': { 3: ['Barrierefreiheit_DIN18040_Prüfprotokoll.pdf'] },
+      '5.1.2': { 2: ['Workshop_Protokoll_LP2.pdf'], 3: ['Integrale_Planung_LP3_Protokoll.pdf'] },
+    },
+
+    evals: {
+      '1.1.1':{1:'not_started',2:'not_started',3:'in_progress', 5:'not_started',8:'not_started'},
+      '1.1.2':{3:'completed',  5:'not_started',8:'not_started'},
+      '1.1.3':{3:'completed',  5:'not_started',8:'not_started'},
+      '1.1.4':{3:'not_started',5:'not_started',8:'not_started'},
+      '1.1.5':{3:'not_started',5:'not_started',8:'not_started'},
+      '1.1.6':{3:'in_progress',5:'not_started',8:'not_started'},
+      '1.1.7':{3:'not_started',5:'not_started',8:'not_started'},
+      '1.2.1':{3:'completed',  5:'not_started',8:'not_started'},
+      '1.2.3':{3:'not_started',5:'not_started',8:'not_started'},
+      '1.2.4':{1:'completed',  3:'completed'},
+      '2.1.1':{2:'completed',  3:'in_progress',5:'not_started',8:'not_started'},
+      '2.2.1':{2:'completed',  3:'not_started'},
+      '2.2.2':{1:'completed',  3:'completed'},
+      '3.1.1':{2:'completed',  3:'in_progress',5:'not_started',8:'not_started'},
+      '3.1.2':{2:'completed',  3:'not_started',5:'not_started',8:'not_started'},
+      '3.1.3':{2:'in_progress',3:'not_started',5:'not_started',8:'not_started'},
+      '3.1.4':{2:'completed',  3:'completed',  5:'not_started',8:'not_started'},
+      '3.1.5':{2:'completed',  3:'in_progress',5:'not_started',8:'not_started'},
+      '3.2.1':{2:'completed',  3:'not_started',5:'not_started'},
+      '3.2.2':{2:'not_started',3:'not_started',5:'not_started'},
+      '3.2.3':{1:'completed',  3:'not_started'},
+      '3.2.4':{2:'completed',  3:'completed'},
+      '3.2.5':{2:'completed',  3:'not_started'},
+      '3.3.1':{2:'in_progress',3:'not_started',5:'not_started'},
+      '3.3.2':{2:'not_started',3:'not_started',5:'not_started'},
+      '4.1.1':{3:'not_started',5:'not_started'},
+      '4.1.2':{3:'not_started',5:'not_started'},
+      '4.1.3':{3:'not_started',5:'not_started'},
+      '4.1.4':{3:'not_started',5:'not_started',8:'not_started'},
+      '4.1.5':{3:'not_started',5:'not_started'},
+      '4.1.6':{2:'not_started',3:'not_started'},
+      '5.1.1':{1:'completed',  2:'completed'},
+      '5.1.2':{1:'completed',  2:'completed',  3:'in_progress'},
+      '5.1.3':{2:'completed',  3:'in_progress',5:'not_started'},
+      '5.1.4':{3:'not_started',5:'not_started',6:'not_started',7:'not_started'},
+      '5.1.5':{5:'not_started',7:'not_started',8:'not_started'},
+      '5.2.1':{7:'not_started',8:'not_started'},
+      '5.2.2':{7:'not_started',8:'not_started'},
+      '5.2.3':{8:'not_started'},
+      '6.1.1':{1:'completed'},
+      '6.1.2':{1:'completed'},
+      '6.1.3':{1:'completed'},
+      '6.1.4':{1:'in_progress'},
+      '6.1.5':{1:'completed'},
+      '6.1.6':{1:'not_started'},
+    },
+
+    scores: {
+      '1.1.1':65,'1.1.2':80,'1.1.3':75,'1.2.1':90,'1.2.4':100,
+      '2.1.1':60,'2.2.2':70,
+      '3.1.4':85,'3.2.4':100,'3.2.5':75,
+      '5.1.1':100,'5.1.2':90,'5.1.3':80,
+      '6.1.1':100,'6.1.2':100,'6.1.3':90,
+    },
+
+    criteria: [
+      { code:'1.1.1', area:1, name_de:'Treibhauspotenzial (GWP)',                  bz:3, lps:[3,5,8],   assigned:'AM' },
+      { code:'1.1.2', area:1, name_de:'Ozonschichtabbaupotenzial (ODP)',            bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.3', area:1, name_de:'Ozonbildungspotenzial (POCP)',               bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.4', area:1, name_de:'Versauerungspotenzial (AP)',                 bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.5', area:1, name_de:'Überdüngungspotenzial (EP)',                 bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.6', area:1, name_de:'Risiken für die lokale Umwelt',              bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.7', area:1, name_de:'Nachhaltige Materialgewinnung (Holz)',       bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.2.1', area:1, name_de:'Primärenergiebedarf (nicht erneuerbar)',     bz:3, lps:[3,5,8],   assigned:'KL' },
+      { code:'1.2.3', area:1, name_de:'Trinkwasserbedarf und Abwasser',             bz:2, lps:[3,5,8],   assigned:null },
+      { code:'1.2.4', area:1, name_de:'Flächeninanspruchnahme',                     bz:2, lps:[1,3],     assigned:null },
+      { code:'2.1.1', area:2, name_de:'Gebäudebezogene Kosten im Lebenszyklus',    bz:3, lps:[2,3,5,8], assigned:null },
+      { code:'2.2.1', area:2, name_de:'Flexibilität und Umnutzungsfähigkeit',       bz:2, lps:[2,3],     assigned:null },
+      { code:'2.2.2', area:2, name_de:'Marktfähigkeit',                             bz:2, lps:[1,3],     assigned:null },
+      { code:'3.1.1', area:3, name_de:'Thermischer Komfort im Sommer',              bz:2, lps:[2,3,5,8], assigned:null },
+      { code:'3.1.2', area:3, name_de:'Thermischer Komfort im Winter',              bz:1, lps:[2,3,5,8], assigned:null },
+      { code:'3.1.3', area:3, name_de:'Innenraumlufthygiene',                       bz:3, lps:[2,3,5,8], assigned:null },
+      { code:'3.1.4', area:3, name_de:'Akustischer Komfort',                        bz:2, lps:[2,3,5,8], assigned:'TM' },
+      { code:'3.1.5', area:3, name_de:'Visueller Komfort',                          bz:2, lps:[2,3,5,8], assigned:null },
+      { code:'3.2.1', area:3, name_de:'Einflussnahme der Nutzer',                   bz:1, lps:[2,3,5],   assigned:null },
+      { code:'3.2.2', area:3, name_de:'Gebäudebezogene Außenraumqualität',          bz:1, lps:[2,3,5],   assigned:null },
+      { code:'3.2.3', area:3, name_de:'Sicherheit und Störfallrisiken',             bz:1, lps:[1,3],     assigned:null },
+      { code:'3.2.4', area:3, name_de:'Zugänglichkeit für alle Nutzergruppen',      bz:1, lps:[2,3],     assigned:null },
+      { code:'3.2.5', area:3, name_de:'Flächeneffizienz',                           bz:1, lps:[2,3],     assigned:null },
+      { code:'3.3.1', area:3, name_de:'Qualität der Freiraumgestaltung',            bz:2, lps:[2,3,5],   assigned:null },
+      { code:'3.3.2', area:3, name_de:'Gestalterische und städtebauliche Qualität', bz:2, lps:[2,3,5],   assigned:null },
+      { code:'4.1.1', area:4, name_de:'Schallschutz',                               bz:1, lps:[3,5],     assigned:null },
+      { code:'4.1.2', area:4, name_de:'Wärme- und feuchteschutztechn. Qualität',   bz:2, lps:[3,5],     assigned:null },
+      { code:'4.1.3', area:4, name_de:'Qualität der Gebäudehülle',                  bz:1, lps:[3,5],     assigned:null },
+      { code:'4.1.4', area:4, name_de:'Einsatz erneuerbarer Energien',              bz:2, lps:[3,5,8],   assigned:null },
+      { code:'4.1.5', area:4, name_de:'Rückbau- und Recyclingfreundlichkeit',       bz:1, lps:[3,5],     assigned:null },
+      { code:'4.1.6', area:4, name_de:'Mobilitätsinfrastruktur',                    bz:1, lps:[2,3],     assigned:null },
+      { code:'5.1.1', area:5, name_de:'Qualität der Projektvorbereitung',           bz:1, lps:[1,2],     assigned:null },
+      { code:'5.1.2', area:5, name_de:'Integrale Planung',                          bz:1, lps:[1,2,3],   assigned:null },
+      { code:'5.1.3', area:5, name_de:'Optimierung des Planungsansatzes',           bz:1, lps:[2,3,5],   assigned:null },
+      { code:'5.1.4', area:5, name_de:'Anforderungen an die Ausführung',            bz:1, lps:[3,5,6,7], assigned:null },
+      { code:'5.1.5', area:5, name_de:'Dokumentation der Bauausführung',            bz:1, lps:[5,7,8],   assigned:null },
+      { code:'5.2.1', area:5, name_de:'Baustelle / Bauprozess',                     bz:1, lps:[7,8],     assigned:null },
+      { code:'5.2.2', area:5, name_de:'Qualitätssicherung der Bauausführung',       bz:1, lps:[7,8],     assigned:null },
+      { code:'5.2.3', area:5, name_de:'Inbetriebnahmeunterstützung',                bz:1, lps:[8],       assigned:null },
+      { code:'6.1.1', area:6, name_de:'Risiken am Mikrostandort',                   bz:0, lps:[1],       assigned:null },
+      { code:'6.1.2', area:6, name_de:'Verhältnisse am Mikrostandort',              bz:0, lps:[1],       assigned:null },
+      { code:'6.1.3', area:6, name_de:'Verkehrsanbindung',                          bz:0, lps:[1],       assigned:null },
+      { code:'6.1.4', area:6, name_de:'Nähe zu nutzungsrelevanten Einrichtungen',  bz:0, lps:[1],       assigned:null },
+      { code:'6.1.5', area:6, name_de:'Anliegende Medieninfrastruktur',             bz:0, lps:[1],       assigned:null },
+      { code:'6.1.6', area:6, name_de:'Image und Zustand von Standort und Quartier',bz:0, lps:[1],      assigned:null },
+    ],
+
+    criteriaByArea(area) { return this.criteria.filter(c => c.area === area); },
+    getEvalStatus(code, lp) { return (this.evals[code]||{})[lp] || 'not_started'; },
+    getScore(code) { return this.scores[code] || 0; },
+    getEvalNote(code, lp) { return (this.evalNotes[code]||{})[lp] || ''; },
+    getDocs(code, lp) { return (this.docs[code]||{})[lp] || []; },
+
+    isOpen(code)  { return this.openFlags[code]?.flagged || false; },
+    getOpenNote(code) { return this.openFlags[code]?.note || ''; },
+    toggleOpen(code) {
+      if (!this.openFlags[code]) this.openFlags[code] = { flagged: false, note: '' };
+      this.openFlags[code].flagged = !this.openFlags[code].flagged;
+    },
+    setOpenNote(code, val) {
+      if (!this.openFlags[code]) this.openFlags[code] = { flagged: true, note: '' };
+      this.openFlags[code].note = val;
+    },
+
+    certLevel(s) {
+      if (s >= 80) return 'Gold';
+      if (s >= 65) return 'Silber';
+      if (s >= 50) return 'Bronze';
+      return 'n.z.';
+    },
+    certBadgeClass(s) {
+      if (s >= 80) return 'border-yellow-400 bg-yellow-50 text-yellow-700';
+      if (s >= 65) return 'border-slate-400 bg-slate-100 text-slate-600';
+      if (s >= 50) return 'border-amber-500 bg-amber-50 text-amber-700';
+      return 'border-red-300 bg-red-50 text-red-600';
+    },
+
+    lpDotStyle(code, lp) {
+      const s = this.getEvalStatus(code, lp);
+      if (s === 'completed')   return 'bg-green-500 text-white';
+      if (s === 'in_progress') return 'bg-amber-400 text-white';
+      return 'bg-slate-200 text-slate-500';
+    },
+    lpShortName(lp) {
+      return ['','GP','VP','EP','GnP','AP','VdV','MdV','OÜ'][lp]||'LP'+lp;
+    },
+    statusLabel(s) {
+      return {completed:'Abgeschlossen',in_progress:'In Bearbeitung',not_started:'Nicht begonnen'}[s]||s;
+    },
+    statusTextColor(s) {
+      return {completed:'text-green-600',in_progress:'text-amber-500',not_started:'text-slate-400'}[s]||'text-slate-400';
+    },
+    scoreTextColor(v) {
+      if (v >= 80) return 'text-green-600';
+      if (v >= 50) return 'text-amber-600';
+      if (v > 0)   return 'text-red-500';
+      return 'text-slate-300';
+    },
+
+    areaName(n) {
+      return ['','Ökologische Qualität','Ökonomische Qualität','Soziokulturelle Qualität',
+              'Technische Qualität','Prozessqualität','Standortmerkmale'][n]||'';
+    },
+    areaWeight(n) { return [0,22.5,22.5,22.5,22.5,10,0][n]; },
+    areaBarColor(n){ return ['','bg-green-500','bg-blue-500','bg-violet-500','bg-orange-400','bg-teal-500','bg-rose-400'][n]; },
+    areaIconBg(n)  { return ['','bg-green-600','bg-blue-600','bg-violet-600','bg-orange-500','bg-teal-600','bg-rose-500'][n]; },
+    areaBorder(n)  { return ['','border-green-300','border-blue-300','border-violet-300','border-orange-300','border-teal-300','border-rose-300'][n]; },
+    areaCodeBadge(n){ return ['','bg-green-100 text-green-800','bg-blue-100 text-blue-800','bg-violet-100 text-violet-800','bg-orange-100 text-orange-800','bg-teal-100 text-teal-800','bg-rose-100 text-rose-700'][n]; },
+    bzBadge(bz) {
+      return ['bg-slate-100 text-slate-400','bg-yellow-100 text-yellow-700','bg-orange-100 text-orange-700','bg-red-100 text-red-700'][bz]||'';
+    },
+  };
+}
+</script>
+</body>
+</html>

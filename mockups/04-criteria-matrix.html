@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Matriz Criterios × LP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    .col-code { flex: 1 1 0%; min-width: 180px; }
+    .col-bz   { width: 36px;  min-width: 36px; }
+    .col-lp   { width: 52px;  min-width: 52px; }
+    .col-score{ width: 64px;  min-width: 64px; }
+    .col-user { width: 64px;  min-width: 64px; }
+    .sticky-left { position: sticky; left: 0; z-index: 2; }
+    .row-hover:hover .sticky-left { background-color: rgb(248 250 252) !important; }
+    .row-sel .sticky-left { background-color: rgb(239 246 255) !important; }
+
+    /* LP toggle circles */
+    .lp-btn { position: relative; }
+    .lp-btn .lp-icon-default { transition: opacity 0.15s; }
+    .lp-btn .lp-icon-hover   { position: absolute; opacity: 0; transition: opacity 0.15s; }
+    .lp-btn:hover .lp-icon-default { opacity: 0; }
+    .lp-btn:hover .lp-icon-hover   { opacity: 1; }
+    .lp-btn.lp-inactive { background: #f1f5f9; border: 1px dashed #cbd5e1; color: #94a3b8; cursor: pointer; }
+    .lp-btn.lp-inactive:hover { border-color: #4ade80; color: #16a34a; background: #f0fdf4; border-style: solid; }
+  </style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+
+<!--
+  DECISIONES DE DISEÑO (04-criteria-matrix.html):
+  - Layout: header + tabs + toolbar + scrollable matrix + right panel (drawer)
+  - Filas: 45 criterios BNB agrupados por área (6 grupos con header colorido)
+  - Columnas: BZ + LP1–LP8 (celdas vacías para LP no aplicables)
+  - Celda: botón de estado coloreado (✓ verde / ◑ ámbar / ○ gris / futuro gris claro)
+  - LP actual (LP3) resaltado con fondo azul
+  - Click en fila o celda → panel lateral derecho con evaluación, docs, comentarios
+  - Filtros: área (chips) + LP + estado + búsqueda de texto
+  - Panel: muestra evaluación compacta por LP relevante; link a 05-criterion-detail.html
+  - Next.js: app/[locale]/(dashboard)/projects/[id]/criteria/page.tsx
+  - Datos: Supabase query con project_criteria + criterion_evaluations + profiles
+  - Realtime: suscripción a criterion_evaluations para actualizar estados en vivo
+-->
+
+<div x-data="matrixApp()" class="flex flex-col h-screen" :class="isDragging && 'cursor-col-resize select-none'">
+
+  <!-- HEADER -->
+  <header class="h-12 bg-white border-b border-slate-200 flex items-center px-5 gap-3 shrink-0 z-20">
+    <a href="02-dashboard.html" class="flex items-center gap-2 shrink-0">
+      <div class="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+        <span class="text-white font-bold text-xs">BNB</span>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">BNBtracker</span>
+    </a>
+    <span class="text-slate-300">/</span>
+    <a href="02-dashboard.html" class="text-slate-500 text-sm hover:text-slate-700">Projekte</a>
+    <span class="text-slate-300">/</span>
+    <span class="font-medium text-slate-800 text-sm truncate">Bundesministerium Berlin</span>
+    <span class="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold shrink-0">LP 3 aktiv</span>
+    <div class="ml-auto flex items-center gap-3">
+      <span class="text-xs text-slate-500 hidden md:block">Bewertung bis <span class="font-semibold text-amber-600">15. Aug 2026</span></span>
+      <button class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 relative">
+        <i data-lucide="bell" class="w-4 h-4"></i>
+        <span class="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full"></span>
+      </button>
+      <div class="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-semibold cursor-pointer">JM</div>
+    </div>
+  </header>
+
+  <!-- PROJECT NAV TABS -->
+  <div class="bg-white border-b border-slate-200 px-4 flex items-center gap-0.5 shrink-0">
+    <a href="03-project-overview.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5 rounded-t">
+      <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>Übersicht
+    </a>
+    <a href="#" class="px-3 py-2.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 flex items-center gap-1.5">
+      <i data-lucide="table-2" class="w-3.5 h-3.5"></i>Kriterien
+    </a>
+    <a href="06-gantt.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="gantt-chart" class="w-3.5 h-3.5"></i>Gantt
+    </a>
+    <a href="07-reports.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>Berichte
+    </a>
+    <a href="08-members.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="users" class="w-3.5 h-3.5"></i>Mitglieder
+    </a>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="bg-white border-b border-slate-200 px-4 py-2 flex flex-wrap items-center gap-2 shrink-0">
+    <!-- Area filter chips -->
+    <div class="flex items-center gap-1">
+      <button @click="filterArea=0"
+        :class="filterArea===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+        class="px-2.5 py-1 rounded-md border text-xs font-medium transition-colors">Alle</button>
+      <template x-for="a in [1,2,3,4,5,6]" :key="a">
+        <button @click="filterArea=a"
+          :class="filterArea===a ? areaActiveBg(a) : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+          class="px-2 py-1 rounded-md border text-xs font-medium transition-colors flex items-center gap-1">
+          <span :class="areaDot(a)" class="w-2 h-2 rounded-full inline-block shrink-0"></span>
+          <span x-text="'Q'+a"></span>
+        </button>
+      </template>
+    </div>
+
+    <div class="w-px h-4 bg-slate-200 hidden sm:block"></div>
+
+    <!-- Status filter -->
+    <select x-model="filterStatus"
+      class="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-green-500">
+      <option value="all">Alle Status</option>
+      <option value="completed">Abgeschlossen</option>
+      <option value="in_progress">In Bearbeitung</option>
+      <option value="not_started">Nicht begonnen</option>
+    </select>
+
+    <!-- LP filter -->
+    <select x-model="filterLP"
+      class="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-green-500">
+      <option value="0">Alle LP</option>
+      <template x-for="n in [1,2,3,4,5,6,7,8]" :key="n">
+        <option :value="n" x-text="'LP '+n"></option>
+      </template>
+    </select>
+
+    <!-- Separator -->
+    <div class="w-px h-4 bg-slate-200 hidden sm:block"></div>
+
+    <!-- Stats chips -->
+    <div class="flex items-center gap-2 text-xs">
+      <span class="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-md border border-green-200">
+        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+        <span x-text="completedCount"></span> abgeschl.
+      </span>
+      <span class="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-md border border-amber-200">
+        <span class="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
+        <span x-text="inProgressCount"></span> aktiv
+      </span>
+      <span class="flex items-center gap-1 px-2 py-1 bg-slate-50 text-slate-600 rounded-md border border-slate-200">
+        <span class="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
+        <span x-text="notStartedCount"></span> offen
+      </span>
+    </div>
+
+    <!-- Search -->
+    <div class="relative ml-auto">
+      <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+      <input x-model="search" type="text" placeholder="Code oder Name suchen…"
+        class="pl-8 pr-3 py-1.5 border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-green-500 w-48">
+      <button x-show="search" @click="search=''" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-3 h-3"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT: matrix + panel -->
+  <div id="main-content" class="flex flex-1 overflow-hidden">
+
+    <!-- MATRIX TABLE (scrollable) -->
+    <div class="flex-1 overflow-auto">
+      <div class="flex flex-col w-full">
+
+        <!-- STICKY HEADER ROW -->
+        <div class="flex sticky top-0 z-10 bg-slate-100 border-b-2 border-slate-200 text-xs font-semibold text-slate-600 shrink-0">
+          <div class="col-code sticky-left bg-slate-100 px-3 py-2.5 flex items-center gap-2">
+            <i data-lucide="list" class="w-3.5 h-3.5 text-slate-400"></i>
+            Kriterium
+            <span class="ml-1 text-slate-400 font-normal" x-text="'('+filteredCount+')'"></span>
+          </div>
+          <div class="col-bz text-center py-2.5 px-1 text-slate-500">BZ</div>
+          <template x-for="lp in [1,2,3,4,5,6,7,8]" :key="lp">
+            <div class="col-lp text-center py-2 flex flex-col items-center justify-center gap-0.5 shrink-0"
+              :class="lp === currentLP ? 'bg-blue-50 text-blue-700' : 'text-slate-500'">
+              <span x-text="'LP'+lp" class="font-semibold"></span>
+              <span x-show="lp === currentLP" class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+              <span x-show="lp < currentLP" class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+              <span x-show="lp > currentLP" class="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
+            </div>
+          </template>
+          <div class="col-score text-center py-2.5 px-1 text-slate-500">Score</div>
+          <div class="col-user text-center py-2.5 px-1 text-slate-500">Verantw.</div>
+        </div>
+
+        <!-- AREA GROUPS -->
+        <template x-for="area in [1,2,3,4,5,6]" :key="area">
+          <div x-show="filterArea===0 || filterArea===area">
+
+            <!-- Area group header -->
+            <div class="flex items-center border-b border-slate-200 shrink-0" :class="areaHeaderBg(area)">
+              <div class="col-code sticky-left px-3 py-1.5 flex items-center gap-2" :class="areaHeaderBg(area)">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" :class="areaDot(area)"></span>
+                <span class="text-xs font-semibold" :class="areaHeaderText(area)" x-text="'Q'+area+' — '+areaName(area)"></span>
+                <span class="text-xs font-normal opacity-60" :class="areaHeaderText(area)"
+                  x-text="'('+criteriaByArea(area).filter(c=>matchesFilter(c)).length+')'"></span>
+                <template x-if="area < 6">
+                  <span class="ml-auto text-xs font-normal opacity-60" :class="areaHeaderText(area)"
+                    x-text="'Ø '+areaScore(area)+'%'"></span>
+                </template>
+                <template x-if="area === 6">
+                  <span class="ml-auto text-xs font-normal opacity-60" :class="areaHeaderText(area)">informativ</span>
+                </template>
+              </div>
+            </div>
+
+            <!-- Criteria rows -->
+            <template x-for="c in criteriaByArea(area)" :key="c.code">
+              <div x-show="matchesFilter(c)"
+                @click="selectCriteria(c)"
+                class="row-hover flex items-center border-b border-slate-100 cursor-pointer transition-colors text-xs"
+                :class="selectedCriteria && selectedCriteria.code===c.code ? 'bg-blue-50 row-sel' : 'bg-white hover:bg-slate-50'">
+
+                <!-- Criterion name (sticky) -->
+                <div class="col-code sticky-left px-3 py-2 flex items-center gap-2 transition-colors"
+                  :class="selectedCriteria && selectedCriteria.code===c.code ? 'bg-blue-50' : 'bg-white'">
+                  <span class="px-1.5 py-0.5 rounded font-mono font-bold text-xs shrink-0 whitespace-nowrap"
+                    :class="areaCodeBadge(area)" x-text="c.code"></span>
+                  <span class="text-slate-700 flex-1 min-w-0 truncate" :title="c.name_de" x-text="c.name_de"></span>
+                  <template x-if="c.bz === 3">
+                    <i data-lucide="star" class="w-3 h-3 text-orange-400 shrink-0 ml-auto" title="Hohe Bedeutung (BZ3)"></i>
+                  </template>
+                </div>
+
+                <!-- BZ badge -->
+                <div class="col-bz text-center px-1 py-2 shrink-0">
+                  <template x-if="c.bz > 0">
+                    <span class="inline-flex w-5 h-5 rounded-full items-center justify-center text-xs font-bold"
+                      :class="bzBadge(c.bz)" x-text="c.bz"></span>
+                  </template>
+                  <template x-if="c.bz === 0">
+                    <span class="text-slate-200">—</span>
+                  </template>
+                </div>
+
+                <!-- LP cells -->
+                <template x-for="lp in [1,2,3,4,5,6,7,8]" :key="lp">
+                  <div class="col-lp flex items-center justify-center py-2 shrink-0"
+                    :class="lp === currentLP ? 'bg-blue-50/30' : ''">
+                    <template x-if="c.lps.includes(lp)">
+                      <button @click.stop="openCriteriaLP(c, lp)"
+                        class="w-7 h-7 rounded-md flex items-center justify-center transition-all hover:scale-110 hover:shadow-sm"
+                        :class="cellStyle(c.code, lp)"
+                        :title="'LP'+lp+': '+statusLabel(getStatus(c.code, lp))">
+                        <template x-if="getStatus(c.code,lp)==='completed'">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </template>
+                        <template x-if="getStatus(c.code,lp)==='in_progress'">
+                          <span class="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent block" style="animation:spin 1.5s linear infinite"></span>
+                        </template>
+                        <template x-if="getStatus(c.code,lp)==='not_started' && lp > currentLP">
+                          <span class="w-1.5 h-1.5 rounded-full bg-slate-300 block"></span>
+                        </template>
+                        <template x-if="getStatus(c.code,lp)==='not_started' && lp <= currentLP">
+                          <span class="w-2 h-2 rounded-full border border-slate-400 block"></span>
+                        </template>
+                      </button>
+                    </template>
+                    <template x-if="!c.lps.includes(lp)">
+                      <span class="text-slate-200 text-base leading-none">·</span>
+                    </template>
+                  </div>
+                </template>
+
+                <!-- Score -->
+                <div class="col-score text-center px-1 py-2 shrink-0">
+                  <template x-if="getScore(c.code) > 0">
+                    <span class="font-semibold" :class="scoreColor(getScore(c.code))" x-text="getScore(c.code)+'%'"></span>
+                  </template>
+                  <template x-if="getScore(c.code) === 0">
+                    <span class="text-slate-300">—</span>
+                  </template>
+                </div>
+
+                <!-- Assigned user -->
+                <div class="col-user flex items-center justify-center px-1 py-2 shrink-0">
+                  <template x-if="c.assigned">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                      :class="userColor(c.assigned)" :title="c.assigned" x-text="c.assigned.slice(0,2)"></div>
+                  </template>
+                  <template x-if="!c.assigned">
+                    <button @click.stop class="w-6 h-6 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center hover:border-green-400 transition-colors" title="Zuweisen">
+                      <svg class="w-2.5 h-2.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                  </template>
+                </div>
+
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- Empty state -->
+        <div x-show="filteredCount === 0" class="flex flex-col items-center justify-center py-16 text-slate-400">
+          <i data-lucide="search-x" class="w-10 h-10 mb-3 opacity-40"></i>
+          <p class="font-medium">Keine Kriterien gefunden</p>
+          <p class="text-sm mt-1">Filter oder Suche anpassen</p>
+        </div>
+
+      </div>
+    </div><!-- end matrix -->
+
+    <!-- DRAG DIVIDER -->
+    <div x-show="showPanel" x-cloak
+      @mousedown.prevent="startDrag($event)"
+      class="w-1 shrink-0 bg-slate-200 hover:bg-green-400 cursor-col-resize transition-colors relative group"
+      title="Breite anpassen">
+      <div class="absolute inset-y-0 -left-1 -right-1"></div>
+    </div>
+
+    <!-- RIGHT DETAIL PANEL -->
+    <div x-show="showPanel" x-cloak
+      x-transition:enter="transition duration-200 ease-out"
+      x-transition:enter-start="opacity-0 translate-x-8"
+      x-transition:enter-end="opacity-100 translate-x-0"
+      :style="'width:' + panelWidth + 'px'"
+      class="border-l border-slate-200 bg-white flex flex-col shrink-0 overflow-hidden shadow-xl">
+
+      <!-- Panel header -->
+      <div class="px-4 py-3 border-b border-slate-200 shrink-0">
+        <div class="flex items-start gap-2">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+              <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
+                :class="selectedCriteria ? areaCodeBadge(selectedCriteria.area) : ''"
+                x-text="selectedCriteria ? selectedCriteria.code : ''"></span>
+              <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                :class="selectedCriteria ? areaStatusChip(selectedCriteria.area) : ''"
+                x-text="selectedCriteria ? areaName(selectedCriteria.area) : ''"></span>
+              <template x-if="selectedCriteria && selectedCriteria.bz > 0">
+                <span class="text-xs px-1.5 py-0.5 rounded font-medium"
+                  :class="selectedCriteria ? bzBadge(selectedCriteria.bz) : ''"
+                  x-text="selectedCriteria ? 'BZ '+selectedCriteria.bz : ''"></span>
+              </template>
+            </div>
+            <h3 class="font-semibold text-slate-900 text-sm leading-snug"
+              x-text="selectedCriteria ? selectedCriteria.name_de : ''"></h3>
+            <p class="text-xs text-slate-400 mt-0.5 italic"
+              x-text="selectedCriteria ? selectedCriteria.name_es : ''"></p>
+          </div>
+          <button @click="showPanel=false; selectedCriteria=null"
+            class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded shrink-0 transition-colors">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Open full detail -->
+        <a :href="'05-criterion-detail.html?code=' + (selectedCriteria ? selectedCriteria.code : '')"
+          class="mt-3 flex items-center justify-center gap-2 w-full py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          Vollständige Detailansicht öffnen
+        </a>
+
+        <!-- Quick status bar -->
+        <div class="mt-3 flex items-center gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-1">
+            <span class="text-slate-500">Status:</span>
+            <select class="flex-1 border border-slate-200 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-green-500"
+              x-model="panelStatus">
+              <option value="not_started">Nicht begonnen</option>
+              <option value="in_progress">In Bearbeitung</option>
+              <option value="completed">Abgeschlossen</option>
+              <option value="not_applicable">Nicht relevant</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500">Score:</span>
+            <span class="font-semibold text-slate-800"
+              x-text="selectedCriteria && getScore(selectedCriteria.code) > 0 ? getScore(selectedCriteria.code)+'%' : '—'"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LP progress overview (mini) -->
+      <div x-show="selectedCriteria" class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 shrink-0">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-slate-500">LP-Übersicht</p>
+          <p class="text-xs text-slate-400">Klicken zum Hinzufügen / Entfernen</p>
+        </div>
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <template x-if="selectedCriteria">
+            <template x-for="lp in [1,2,3,4,5,6,7,8]" :key="lp">
+              <div class="flex flex-col items-center gap-0.5">
+                <button @click="toggleLP(lp)"
+                  class="lp-btn w-7 h-7 rounded-md flex items-center justify-center text-xs font-medium border transition-all"
+                  :class="selectedCriteria.lps.includes(lp)
+                    ? (lp === currentLP ? 'lp-active border-blue-400 ring-2 ring-blue-200 '+cellStyle(selectedCriteria.code, lp) : 'lp-active '+cellStyle(selectedCriteria.code, lp))
+                    : 'lp-inactive'"
+                  :title="selectedCriteria.lps.includes(lp) ? 'LP '+lp+' entfernen' : 'LP '+lp+' hinzufügen'">
+
+                  <!-- active + completed: checkmark → × on hover -->
+                  <template x-if="selectedCriteria.lps.includes(lp) && getStatus(selectedCriteria.code,lp)==='completed'">
+                    <span class="flex items-center justify-center w-full h-full">
+                      <svg class="lp-icon-default w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                      <svg class="lp-icon-hover w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </span>
+                  </template>
+                  <!-- active + not completed: number → × on hover -->
+                  <template x-if="selectedCriteria.lps.includes(lp) && getStatus(selectedCriteria.code,lp)!=='completed'">
+                    <span class="flex items-center justify-center w-full h-full">
+                      <span class="lp-icon-default" x-text="lp"></span>
+                      <svg class="lp-icon-hover w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </span>
+                  </template>
+                  <!-- inactive: number → + on hover -->
+                  <template x-if="!selectedCriteria.lps.includes(lp)">
+                    <span class="flex items-center justify-center w-full h-full">
+                      <span class="lp-icon-default" x-text="lp"></span>
+                      <svg class="lp-icon-hover w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+                    </span>
+                  </template>
+                </button>
+                <span class="text-xs text-slate-400" x-text="'LP'+lp"></span>
+              </div>
+            </template>
+          </template>
+        </div>
+      </div>
+
+      <!-- Panel tabs -->
+      <div class="flex border-b border-slate-200 shrink-0 bg-white">
+        <button @click="panelTab='evaluations'"
+          :class="panelTab==='evaluations' ? 'border-b-2 border-green-600 text-green-700 font-semibold' : 'text-slate-500 hover:text-slate-700'"
+          class="flex-1 py-2.5 text-xs transition-colors">Bewertungen</button>
+        <button @click="panelTab='documents'"
+          :class="panelTab==='documents' ? 'border-b-2 border-green-600 text-green-700 font-semibold' : 'text-slate-500 hover:text-slate-700'"
+          class="flex-1 py-2.5 text-xs transition-colors">Dokumente</button>
+        <button @click="panelTab='comments'"
+          :class="panelTab==='comments' ? 'border-b-2 border-green-600 text-green-700 font-semibold' : 'text-slate-500 hover:text-slate-700'"
+          class="flex-1 py-2.5 text-xs transition-colors">Kommentare</button>
+      </div>
+
+      <!-- Panel body (scrollable) -->
+      <div class="flex-1 overflow-y-auto">
+
+        <!-- EVALUATIONS TAB -->
+        <div x-show="panelTab==='evaluations'" class="p-4 space-y-3">
+          <template x-if="selectedCriteria">
+            <div>
+              <template x-for="lp in selectedCriteria.lps" :key="lp">
+                <div class="mb-3 border border-slate-200 rounded-lg overflow-hidden"
+                  :class="lp === currentLP ? 'border-blue-300 shadow-sm' : ''">
+                  <!-- LP row header -->
+                  <div class="flex items-center justify-between px-3 py-2 border-b"
+                    :class="lp === currentLP ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-semibold" :class="lp===currentLP ? 'text-blue-700' : 'text-slate-700'"
+                        x-text="'LP '+lp"></span>
+                      <span x-show="lp===currentLP"
+                        class="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded font-medium">Aktuell</span>
+                      <span x-show="lp < currentLP && getStatus(selectedCriteria.code,lp)==='completed'"
+                        class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">✓ Abgeschl.</span>
+                      <span x-show="lp > currentLP"
+                        class="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded">Ausstehend</span>
+                    </div>
+                    <span class="text-xs font-medium"
+                      :class="statusTextColor(getStatus(selectedCriteria.code, lp))"
+                      x-text="statusLabel(getStatus(selectedCriteria.code, lp))"></span>
+                  </div>
+                  <!-- LP evaluation form -->
+                  <div class="px-3 py-3 space-y-2.5"
+                    :class="lp > currentLP ? 'opacity-50 pointer-events-none' : ''">
+                    <div class="flex items-center gap-2">
+                      <label class="text-xs text-slate-500 w-14 shrink-0">Erfüllungsgrad</label>
+                      <input type="range" min="0" max="100" step="5"
+                        :value="getScore(selectedCriteria.code)"
+                        class="flex-1 accent-green-600">
+                      <input type="number" min="0" max="100"
+                        :value="getScore(selectedCriteria.code)"
+                        class="w-14 border border-slate-200 rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-green-500">
+                      <span class="text-xs text-slate-400 shrink-0">%</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                      <label class="text-xs text-slate-500 w-14 shrink-0 pt-1.5">Notizen</label>
+                      <textarea placeholder="Bewertungsnotizen für LP…" rows="2"
+                        class="flex-1 border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 resize-none"></textarea>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                        <input type="checkbox" class="rounded border-slate-300 text-green-600">
+                        Als abgeschlossen markieren
+                      </label>
+                      <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-semibold transition-colors">
+                        Speichern
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- DOCUMENTS TAB -->
+        <div x-show="panelTab==='documents'" class="p-4 space-y-3">
+          <!-- LP selector -->
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="text-xs text-slate-500 mr-1">LP:</span>
+            <template x-if="selectedCriteria">
+              <template x-for="lp in selectedCriteria.lps" :key="lp">
+                <button class="px-2.5 py-1 rounded-md text-xs font-medium border transition-colors"
+                  :class="activeLpDocs===lp ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                  @click="activeLpDocs=lp" x-text="'LP '+lp"></button>
+              </template>
+            </template>
+          </div>
+
+          <!-- Doc list (sample) -->
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2 p-2.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors group">
+              <div class="w-7 h-7 rounded bg-red-100 flex items-center justify-center shrink-0">
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-red-600"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-medium text-slate-700 truncate">LCA-Berechnung_LP3_v2.pdf</p>
+                <p class="text-xs text-slate-400">PDF · 2.4 MB · 15.05.2026 · J. Müller</p>
+              </div>
+              <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1 text-slate-400 hover:text-blue-600 rounded" title="Vorschau">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                </button>
+                <button class="p-1 text-slate-400 hover:text-green-600 rounded" title="Herunterladen">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 p-2.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors group">
+              <div class="w-7 h-7 rounded bg-green-100 flex items-center justify-center shrink-0">
+                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-green-700"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-medium text-slate-700 truncate">Ökobilanz_Materialien.xlsx</p>
+                <p class="text-xs text-slate-400">XLSX · 0.8 MB · 10.05.2026 · K. Lang</p>
+              </div>
+              <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1 text-slate-400 hover:text-blue-600 rounded" title="Vorschau">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                </button>
+                <button class="p-1 text-slate-400 hover:text-green-600 rounded">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upload drop zone -->
+          <div class="border-2 border-dashed border-slate-200 rounded-lg p-5 text-center hover:border-green-400 hover:bg-green-50/30 cursor-pointer transition-colors">
+            <i data-lucide="upload-cloud" class="w-6 h-6 text-slate-400 mx-auto mb-2"></i>
+            <p class="text-xs font-medium text-slate-600">Dateien hochladen oder ablegen</p>
+            <p class="text-xs text-slate-400 mt-0.5">PDF, DOCX, XLSX, DWG, Bilder</p>
+          </div>
+        </div>
+
+        <!-- COMMENTS TAB -->
+        <div x-show="panelTab==='comments'" class="p-4 space-y-3">
+          <!-- Internal/external toggle -->
+          <div class="flex gap-1.5 p-1 bg-slate-100 rounded-lg">
+            <button @click="commentType='internal'"
+              :class="commentType==='internal' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'"
+              class="flex-1 py-1.5 rounded-md text-xs font-medium transition-all">
+              Intern <span class="ml-1 text-slate-400">(3)</span>
+            </button>
+            <button @click="commentType='external'"
+              :class="commentType==='external' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'"
+              class="flex-1 py-1.5 rounded-md text-xs font-medium transition-all">
+              Extern <span class="ml-1 text-slate-400">(1)</span>
+            </button>
+          </div>
+
+          <!-- Comment thread -->
+          <div class="space-y-3">
+            <div class="flex gap-2.5">
+              <div class="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-semibold shrink-0 mt-0.5">JM</div>
+              <div class="flex-1">
+                <div class="bg-slate-50 rounded-xl rounded-tl-sm p-2.5">
+                  <p class="text-xs font-semibold text-slate-800">Julia Müller
+                    <span class="font-normal text-slate-400 ml-1">12. Mai 2026</span>
+                  </p>
+                  <p class="text-xs text-slate-700 mt-1">Die LCA-Berechnung ist fertig für Review. Bitte bis LP3 abzeichnen.</p>
+                </div>
+              </div>
+            </div>
+            <div class="flex gap-2.5">
+              <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-semibold shrink-0 mt-0.5">KL</div>
+              <div class="flex-1">
+                <div class="bg-slate-50 rounded-xl rounded-tl-sm p-2.5">
+                  <p class="text-xs font-semibold text-slate-800">Klaus Lang
+                    <span class="font-normal text-slate-400 ml-1">13. Mai 2026</span>
+                  </p>
+                  <p class="text-xs text-slate-700 mt-1">Geprüft. Es fehlen noch die Betriebsenergie-Werte aus der Haustechnikplanung.</p>
+                </div>
+              </div>
+            </div>
+            <div class="flex gap-2.5">
+              <div class="w-6 h-6 rounded-full bg-violet-500 flex items-center justify-center text-white text-xs font-semibold shrink-0 mt-0.5">TM</div>
+              <div class="flex-1">
+                <div class="bg-amber-50 border border-amber-200 rounded-xl rounded-tl-sm p-2.5">
+                  <p class="text-xs font-semibold text-slate-800">Thomas M.
+                    <span class="font-normal text-slate-400 ml-1">14. Mai 2026</span>
+                    <span class="ml-2 text-xs text-amber-600 font-medium">📌 Offen</span>
+                  </p>
+                  <p class="text-xs text-slate-700 mt-1">Werte werden von HL-Planer bis 20. Mai geliefert.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- New comment -->
+          <div class="border-t border-slate-200 pt-3">
+            <textarea placeholder="Kommentar schreiben…" rows="2"
+              class="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 resize-none mb-2"></textarea>
+            <div class="flex items-center justify-between">
+              <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                <input type="checkbox" class="rounded border-slate-300 text-green-600">
+                Für Auftraggeber sichtbar
+              </label>
+              <div class="flex items-center gap-1.5">
+                <button class="p-1.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 transition-colors">
+                  <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
+                </button>
+                <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-semibold transition-colors">
+                  Senden
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end panel body -->
+
+    </div><!-- end right panel -->
+
+  </div><!-- end main content -->
+
+</div><!-- end x-data -->
+
+<!-- Mockup nav -->
+<div class="fixed bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full shadow-md px-5 py-1.5 flex items-center gap-3 z-50 text-xs">
+  <a href="03-project-overview.html" class="text-slate-400 hover:text-slate-700">← Overview</a>
+  <span class="text-slate-200">|</span>
+  <span class="text-slate-400 font-semibold">04 Kriterien-Matrix</span>
+  <span class="text-slate-200">|</span>
+  <a href="05-criterion-detail.html" class="text-slate-400 hover:text-slate-700">Detail →</a>
+</div>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<script>
+function matrixApp() {
+  return {
+    currentLP: 3,
+    filterArea: 0,
+    filterStatus: 'all',
+    filterLP: 0,
+    search: '',
+    showPanel: false,
+    selectedCriteria: null,
+    panelTab: 'evaluations',
+    panelStatus: 'in_progress',
+    commentType: 'internal',
+    activeLpDocs: 3,
+    panelWidth: 420,
+    isDragging: false,
+
+    criteria: [
+      // Area 1 — Ökologische Qualität (10 criteria)
+      { code:'1.1.1', area:1, name_de:'Treibhauspotenzial (GWP)',              name_es:'Potencial calentamiento global',      bz:3, lps:[3,5,8],   assigned:'AM' },
+      { code:'1.1.2', area:1, name_de:'Ozonschichtabbaupotenzial (ODP)',       name_es:'Agotamiento capa de ozono',           bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.3', area:1, name_de:'Ozonbildungspotenzial (POCP)',          name_es:'Formación de ozono troposférico',     bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.4', area:1, name_de:'Versauerungspotenzial (AP)',            name_es:'Potencial de acidificación',          bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.5', area:1, name_de:'Überdüngungspotenzial (EP)',            name_es:'Potencial de eutrofización',          bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.6', area:1, name_de:'Risiken für die lokale Umwelt',         name_es:'Riesgos para el entorno local',       bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.1.7', area:1, name_de:'Nachhaltige Materialgewinnung (Holz)',  name_es:'Madera de fuentes sostenibles',       bz:1, lps:[3,5,8],   assigned:null },
+      { code:'1.2.1', area:1, name_de:'Primärenergiebedarf (nicht erneuerbar)',name_es:'Energía primaria no renovable',       bz:3, lps:[3,5,8],   assigned:'KL' },
+      { code:'1.2.3', area:1, name_de:'Trinkwasserbedarf und Abwasser',        name_es:'Demanda agua potable y residual',     bz:2, lps:[3,5,8],   assigned:null },
+      { code:'1.2.4', area:1, name_de:'Flächeninanspruchnahme',                name_es:'Uso del suelo',                      bz:2, lps:[1,3],     assigned:null },
+      // Area 2 — Ökonomische Qualität (3 criteria)
+      { code:'2.1.1', area:2, name_de:'Gebäudebezogene Kosten im Lebenszyklus',name_es:'Costes del ciclo de vida',            bz:3, lps:[2,3,5,8], assigned:null },
+      { code:'2.2.1', area:2, name_de:'Flächeneffizienz',                      name_es:'Eficiencia de superficies (NUF/BGF)', bz:2, lps:[3,5],    assigned:null },
+      { code:'2.2.2', area:2, name_de:'Anpassungsfähigkeit',                   name_es:'Adaptabilidad a largo plazo',         bz:2, lps:[3,5],    assigned:null },
+      // Area 3 — Soziokulturelle Qualität (12 criteria)
+      { code:'3.1.1', area:3, name_de:'Thermischer Komfort im Winter',         name_es:'Confort térmico en invierno',         bz:2, lps:[3,5,8],  assigned:null },
+      { code:'3.1.3', area:3, name_de:'Innenraumlufthygiene',                  name_es:'Calidad del aire interior',           bz:2, lps:[3,5,8],  assigned:null },
+      { code:'3.1.4', area:3, name_de:'Akustischer Komfort',                   name_es:'Confort acústico',                   bz:2, lps:[3,5,8],  assigned:'TM' },
+      { code:'3.1.5', area:3, name_de:'Visueller Komfort',                     name_es:'Confort visual y luz natural',        bz:2, lps:[3,5],    assigned:null },
+      { code:'3.1.6', area:3, name_de:'Einflussnahmemöglichkeiten durch Nutzer',name_es:'Control individual del usuario',     bz:1, lps:[3,5],    assigned:null },
+      { code:'3.1.7', area:3, name_de:'Aufenthaltsqualitäten im Außenbereich', name_es:'Calidad de espacios exteriores',      bz:1, lps:[3,5],    assigned:null },
+      { code:'3.1.8', area:3, name_de:'Sicherheit und Störfallrisiken',        name_es:'Seguridad y riesgos de incidentes',  bz:1, lps:[3,5],    assigned:null },
+      { code:'3.2.1', area:3, name_de:'Barrierefreiheit',                      name_es:'Accesibilidad libre de barreras',     bz:2, lps:[3,5],    assigned:null },
+      { code:'3.2.4', area:3, name_de:'Zugänglichkeit',                        name_es:'Accesibilidad general del edificio',  bz:1, lps:[3,5],    assigned:null },
+      { code:'3.2.5', area:3, name_de:'Mobilitätsinfrastruktur',               name_es:'Infraestructura de movilidad sostenible',bz:1, lps:[1,3], assigned:null },
+      { code:'3.3.1', area:3, name_de:'Gestalterische und städtebauliche Qualität',name_es:'Calidad arquitectónica y urbanística',bz:2, lps:[3,5],assigned:null},
+      { code:'3.3.2', area:3, name_de:'Kunst am Bau',                          name_es:'Arte en la construcción',             bz:1, lps:[5,8],    assigned:null },
+      // Area 4 — Technische Qualität (6 criteria)
+      { code:'4.1.1', area:4, name_de:'Schallschutz',                          name_es:'Aislamiento acústico',               bz:2, lps:[3,5,8],  assigned:null },
+      { code:'4.1.2', area:4, name_de:'Wärme- und Tauwasserschutz',            name_es:'Aislamiento térmico y protección condensación',bz:1, lps:[3,5,8], assigned:null },
+      { code:'4.1.3', area:4, name_de:'Reinigung und Instandhaltungsfreundlichkeit',name_es:'Facilidad de limpieza y mantenimiento',bz:1, lps:[3,5], assigned:null },
+      { code:'4.1.4', area:4, name_de:'Rückbau, Trennung und Verwertung',      name_es:'Deconstrucción, separación y reciclaje',bz:1, lps:[3,5],  assigned:null },
+      { code:'4.1.5', area:4, name_de:'Widerstandsfähigkeit gegen Naturgefahren',name_es:'Resistencia ante peligros naturales',bz:1, lps:[1,3],   assigned:null },
+      { code:'4.1.6', area:4, name_de:'Bedienungs- und Instandhaltungsfreundlichkeit der TGA',name_es:'Facilidad operación y mantenimiento TGA',bz:1, lps:[3,5,8], assigned:null },
+      // Area 5 — Prozessqualität (8 criteria)
+      { code:'5.1.1', area:5, name_de:'Projektvorbereitung',                   name_es:'Preparación del proyecto',           bz:1, lps:[1,2],     assigned:null },
+      { code:'5.1.2', area:5, name_de:'Integrale Planung',                     name_es:'Planificación integral',             bz:1, lps:[1,2,3],   assigned:null },
+      { code:'5.1.3', area:5, name_de:'Komplexität und Optimierung der Planung',name_es:'Complejidad y optimización del diseño',bz:1, lps:[3,5],  assigned:null },
+      { code:'5.1.4', area:5, name_de:'Ausschreibung und Vergabe',             name_es:'Licitación y adjudicación',          bz:1, lps:[6,7],     assigned:null },
+      { code:'5.1.5', area:5, name_de:'Voraussetzungen für optimale Bewirtschaftung',name_es:'Condiciones para gestión operativa óptima',bz:1, lps:[5,8], assigned:null },
+      { code:'5.2.1', area:5, name_de:'Baustelle / Bauprozess',                name_es:'Gestión sostenible de la obra',      bz:1, lps:[7,8],     assigned:null },
+      { code:'5.2.2', area:5, name_de:'Qualitätssicherung der Bauausführung',  name_es:'Control de calidad en obra',         bz:1, lps:[8],       assigned:null },
+      { code:'5.2.3', area:5, name_de:'Systematische Inbetriebnahme',          name_es:'Puesta en marcha sistemática',       bz:1, lps:[8],       assigned:null },
+      // Area 6 — Standortmerkmale (6 criteria, informational, bz=0)
+      { code:'6.1.1', area:6, name_de:'Risiken am Mikrostandort',              name_es:'Riesgos en el microentorno',         bz:0, lps:[1],       assigned:null },
+      { code:'6.1.2', area:6, name_de:'Verhältnisse am Mikrostandort',         name_es:'Condiciones del microentorno',       bz:0, lps:[1],       assigned:null },
+      { code:'6.1.3', area:6, name_de:'Quartiersmerkmale',                     name_es:'Características del barrio',         bz:0, lps:[1],       assigned:null },
+      { code:'6.1.4', area:6, name_de:'Verkehrsanbindung',                     name_es:'Conectividad y transporte público',  bz:0, lps:[1],       assigned:null },
+      { code:'6.1.5', area:6, name_de:'Nähe zu nutzungsrelevanten Einrichtungen',name_es:'Proximidad a servicios y equipamientos',bz:0, lps:[1],  assigned:null },
+      { code:'6.1.6', area:6, name_de:'Anliegende Medien / Erschließung',      name_es:'Infraestructura de suministros',     bz:0, lps:[1],       assigned:null },
+    ],
+
+    // Sample evaluation states (project at LP3)
+    evals: {
+      '1.1.1': {3:'in_progress', 5:'not_started', 8:'not_started'},
+      '1.1.2': {3:'completed',   5:'not_started', 8:'not_started'},
+      '1.1.3': {3:'completed',   5:'not_started', 8:'not_started'},
+      '1.1.4': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '1.1.5': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '1.1.6': {3:'in_progress', 5:'not_started', 8:'not_started'},
+      '1.1.7': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '1.2.1': {3:'completed',   5:'not_started', 8:'not_started'},
+      '1.2.3': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '1.2.4': {1:'completed',   3:'completed'},
+      '2.1.1': {2:'completed',   3:'in_progress', 5:'not_started', 8:'not_started'},
+      '2.2.1': {3:'not_started', 5:'not_started'},
+      '2.2.2': {3:'not_started', 5:'not_started'},
+      '3.1.1': {3:'in_progress', 5:'not_started', 8:'not_started'},
+      '3.1.3': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '3.1.4': {3:'completed',   5:'not_started', 8:'not_started'},
+      '3.1.5': {3:'in_progress', 5:'not_started'},
+      '3.1.6': {3:'not_started', 5:'not_started'},
+      '3.1.7': {3:'not_started', 5:'not_started'},
+      '3.1.8': {3:'not_started', 5:'not_started'},
+      '3.2.1': {3:'not_started', 5:'not_started'},
+      '3.2.4': {3:'completed',   5:'not_started'},
+      '3.2.5': {1:'completed',   3:'not_started'},
+      '3.3.1': {3:'not_started', 5:'not_started'},
+      '3.3.2': {5:'not_started', 8:'not_started'},
+      '4.1.1': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '4.1.2': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '4.1.3': {3:'not_started', 5:'not_started'},
+      '4.1.4': {3:'not_started', 5:'not_started'},
+      '4.1.5': {1:'not_started', 3:'not_started'},
+      '4.1.6': {3:'not_started', 5:'not_started', 8:'not_started'},
+      '5.1.1': {1:'completed',   2:'completed'},
+      '5.1.2': {1:'completed',   2:'completed',   3:'in_progress'},
+      '5.1.3': {3:'in_progress', 5:'not_started'},
+      '5.1.4': {6:'not_started', 7:'not_started'},
+      '5.1.5': {5:'not_started', 8:'not_started'},
+      '5.2.1': {7:'not_started', 8:'not_started'},
+      '5.2.2': {8:'not_started'},
+      '5.2.3': {8:'not_started'},
+      '6.1.1': {1:'completed'},
+      '6.1.2': {1:'completed'},
+      '6.1.3': {1:'completed'},
+      '6.1.4': {1:'in_progress'},
+      '6.1.5': {1:'completed'},
+      '6.1.6': {1:'not_started'},
+    },
+
+    scores: {
+      '1.1.1':65, '1.1.2':80, '1.1.3':75, '1.2.1':90, '1.2.4':100,
+      '2.1.1':60, '2.2.2':70,
+      '3.1.4':85, '3.2.4':100, '3.2.5':75,
+      '5.1.1':100, '5.1.2':90, '5.1.3':80,
+      '6.1.1':100, '6.1.2':100, '6.1.3':90,
+    },
+
+    // ── Getters ──────────────────────────────────────────────────────
+    getStatus(code, lp) {
+      const e = this.evals[code];
+      if (!e) return 'not_started';
+      return e[lp] || 'not_started';
+    },
+    getScore(code) { return this.scores[code] || 0; },
+
+    criteriaByArea(area) { return this.criteria.filter(c => c.area === area); },
+
+    matchesFilter(c) {
+      if (this.filterArea !== 0 && c.area !== this.filterArea) return false;
+      if (this.search) {
+        const s = this.search.toLowerCase();
+        if (!c.code.toLowerCase().includes(s) &&
+            !c.name_de.toLowerCase().includes(s) &&
+            !c.name_es.toLowerCase().includes(s)) return false;
+      }
+      if (this.filterStatus !== 'all') {
+        const any = c.lps.some(lp => this.getStatus(c.code, lp) === this.filterStatus);
+        if (!any) return false;
+      }
+      if (parseInt(this.filterLP) > 0) {
+        if (!c.lps.includes(parseInt(this.filterLP))) return false;
+      }
+      return true;
+    },
+
+    get filteredCount() { return this.criteria.filter(c => this.matchesFilter(c)).length; },
+
+    get completedCount() {
+      return this.criteria.filter(c => {
+        const rel = c.lps.filter(lp => lp <= this.currentLP);
+        return rel.length > 0 && rel.every(lp => this.getStatus(c.code, lp) === 'completed');
+      }).length;
+    },
+    get inProgressCount() {
+      return this.criteria.filter(c => c.lps.some(lp => this.getStatus(c.code, lp) === 'in_progress')).length;
+    },
+    get notStartedCount() {
+      return this.criteria.filter(c => {
+        const rel = c.lps.filter(lp => lp <= this.currentLP);
+        return rel.length > 0 && rel.some(lp => this.getStatus(c.code, lp) === 'not_started') &&
+               !rel.some(lp => this.getStatus(c.code, lp) === 'in_progress');
+      }).length;
+    },
+
+    areaScore(area) {
+      const ac = this.criteriaByArea(area).filter(c => c.bz > 0);
+      if (!ac.length) return 0;
+      const done = ac.filter(c => {
+        const rel = c.lps.filter(lp => lp <= this.currentLP);
+        return rel.length > 0 && rel.every(lp => this.getStatus(c.code, lp) === 'completed');
+      }).length;
+      return Math.round(done / ac.length * 100);
+    },
+
+    // ── Actions ──────────────────────────────────────────────────────
+    selectCriteria(c) {
+      this.selectedCriteria = c;
+      this.showPanel = true;
+      this.panelTab = 'evaluations';
+      this.activeLpDocs = c.lps.find(lp => lp <= this.currentLP) || c.lps[0];
+      const s = c.lps.reduce((best, lp) => {
+        const st = this.getStatus(c.code, lp);
+        if (st === 'in_progress') return 'in_progress';
+        if (st === 'completed' && best !== 'in_progress') return 'completed';
+        return best;
+      }, 'not_started');
+      this.panelStatus = s;
+      this.$nextTick(() => lucide.createIcons());
+    },
+    openCriteriaLP(c, lp) {
+      this.selectCriteria(c);
+    },
+
+    toggleLP(lp) {
+      const c = this.selectedCriteria;
+      if (!c) return;
+      const idx = c.lps.indexOf(lp);
+      if (idx === -1) {
+        c.lps = [...c.lps, lp].sort((a, b) => a - b);
+        if (!this.evals[c.code]) this.evals[c.code] = {};
+        if (!this.evals[c.code][lp]) this.evals[c.code][lp] = 'not_started';
+      } else {
+        // Only allow removing if no evaluation recorded yet
+        if (this.getStatus(c.code, lp) === 'not_started') {
+          c.lps = c.lps.filter(l => l !== lp);
+        }
+      }
+    },
+
+    startDrag(e) {
+      this.isDragging = true;
+      const container = document.getElementById('main-content');
+      const onMove = (ev) => {
+        const rect = container.getBoundingClientRect();
+        const newWidth = rect.right - ev.clientX;
+        this.panelWidth = Math.max(280, Math.min(newWidth, Math.round(rect.width * 0.65)));
+      };
+      const onUp = () => {
+        this.isDragging = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+
+    // ── Color helpers ─────────────────────────────────────────────────
+    areaName(n) {
+      return ['','Ökologische Qualität','Ökonomische Qualität','Soziokulturelle Qualität',
+              'Technische Qualität','Prozessqualität','Standortmerkmale'][n] || '';
+    },
+    areaHeaderBg(n)   { return ['','bg-green-50','bg-blue-50','bg-violet-50','bg-orange-50','bg-teal-50','bg-rose-50'][n]; },
+    areaHeaderText(n) { return ['','text-green-800','text-blue-800','text-violet-800','text-orange-700','text-teal-800','text-rose-700'][n]; },
+    areaCodeBadge(n)  { return ['','bg-green-100 text-green-800','bg-blue-100 text-blue-800','bg-violet-100 text-violet-800','bg-orange-100 text-orange-800','bg-teal-100 text-teal-800','bg-rose-100 text-rose-700'][n]; },
+    areaStatusChip(n) { return ['','bg-green-100 text-green-700','bg-blue-100 text-blue-700','bg-violet-100 text-violet-700','bg-orange-100 text-orange-700','bg-teal-100 text-teal-700','bg-rose-100 text-rose-600'][n]; },
+    areaActiveBg(n)   { return ['','bg-green-600 text-white border-green-600','bg-blue-600 text-white border-blue-600','bg-violet-600 text-white border-violet-600','bg-orange-500 text-white border-orange-500','bg-teal-600 text-white border-teal-600','bg-rose-500 text-white border-rose-500'][n]; },
+    areaDot(n)        { return ['','bg-green-500','bg-blue-500','bg-violet-500','bg-orange-400','bg-teal-500','bg-rose-400'][n]; },
+
+    bzBadge(bz) {
+      return ['bg-slate-100 text-slate-400','bg-yellow-100 text-yellow-700','bg-orange-100 text-orange-700','bg-red-100 text-red-700'][bz] || '';
+    },
+
+    cellStyle(code, lp) {
+      const s = this.getStatus(code, lp);
+      const future = lp > this.currentLP;
+      if (s === 'completed')  return 'bg-green-500 text-white';
+      if (s === 'in_progress') return 'bg-amber-400 text-white';
+      if (future)             return 'bg-slate-100 text-slate-300 border border-slate-200';
+      return 'bg-slate-100 text-slate-400 border border-slate-200';
+    },
+
+    statusLabel(s) {
+      return {completed:'Abgeschlossen', in_progress:'In Bearbeitung', not_started:'Nicht begonnen', not_applicable:'Nicht relevant'}[s] || s;
+    },
+    statusTextColor(s) {
+      return {completed:'text-green-600', in_progress:'text-amber-500', not_started:'text-slate-400', not_applicable:'text-slate-300'}[s] || 'text-slate-400';
+    },
+
+    scoreColor(v) {
+      if (v >= 80) return 'text-green-600';
+      if (v >= 50) return 'text-amber-600';
+      return 'text-red-500';
+    },
+
+    userColor(initials) {
+      const colors = ['bg-violet-500','bg-blue-500','bg-teal-500','bg-orange-400','bg-rose-500','bg-indigo-500'];
+      let h = 0;
+      for (let i = 0; i < initials.length; i++) h = initials.charCodeAt(i) + ((h << 5) - h);
+      return colors[Math.abs(h) % colors.length];
+    },
+  };
+}
+
+document.addEventListener('alpine:initialized', () => {
+  lucide.createIcons();
+});
+</script>
+</body>
+</html>

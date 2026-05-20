@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Berichte & Score</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    input[type=range] { accent-color: #16a34a; }
+  </style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+
+<!--
+  DECISIONES DE DISEÑO (07-reports.html):
+  - Dos paneles: izq = score dashboard; der = exportar + simulador
+  - Score total calculado como promedio ponderado (Q1-Q5 × 22.5%/22.5%/22.5%/22.5%/10%)
+  - Q6 = informativo (no afecta score total)
+  - Simulador: sliders por área → calcula proyección de nivel de certificación
+  - Exports: PDF (Bericht LP3) y Excel (Kriterienmatrix) — llaman a FastAPI /reports/pdf|excel
+  - Historial: lista de reportes generados previamente con descarga
+  - Next.js: app/[locale]/(dashboard)/projects/[id]/reports/page.tsx
+  - calculate_project_score() via Supabase RPC + datos en tiempo real
+  - PDF/Excel generados via FastAPI (WeasyPrint / openpyxl) → guardados en Storage
+-->
+
+<div x-data="reportsApp()" class="flex flex-col h-screen">
+
+  <!-- HEADER -->
+  <header class="h-12 bg-white border-b border-slate-200 flex items-center px-5 gap-3 shrink-0 z-20">
+    <a href="02-dashboard.html" class="flex items-center gap-2 shrink-0">
+      <div class="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+        <span class="text-white font-bold text-xs">BNB</span>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">BNBtracker</span>
+    </a>
+    <span class="text-slate-300">/</span>
+    <a href="02-dashboard.html" class="text-slate-500 text-sm hover:text-slate-700">Projekte</a>
+    <span class="text-slate-300">/</span>
+    <a href="03-project-overview.html" class="text-slate-500 text-sm hover:text-slate-700 truncate max-w-36">Bundesministerium Berlin</a>
+    <span class="text-slate-300">/</span>
+    <span class="text-slate-700 text-sm font-medium">Berichte</span>
+    <span class="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold">LP 3 aktiv</span>
+    <div class="ml-auto flex items-center gap-3">
+      <button class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+        <i data-lucide="bell" class="w-4 h-4"></i>
+      </button>
+      <div class="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-semibold">JM</div>
+    </div>
+  </header>
+
+  <!-- PROJECT NAV TABS -->
+  <div class="bg-white border-b border-slate-200 px-4 flex items-center gap-0.5 shrink-0">
+    <a href="03-project-overview.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>Übersicht
+    </a>
+    <a href="04-criteria-matrix.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="table-2" class="w-3.5 h-3.5"></i>Kriterien
+    </a>
+    <a href="06-gantt.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="gantt-chart" class="w-3.5 h-3.5"></i>Gantt
+    </a>
+    <a href="#" class="px-3 py-2.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 flex items-center gap-1.5">
+      <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>Berichte
+    </a>
+    <a href="08-members.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="users" class="w-3.5 h-3.5"></i>Mitglieder
+    </a>
+  </div>
+
+  <!-- MAIN -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- LEFT: Score Dashboard -->
+    <div class="flex-1 overflow-y-auto p-6 space-y-6">
+
+      <!-- Total score card -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div class="flex items-center gap-6">
+          <!-- SVG Ring -->
+          <div class="relative shrink-0">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f5f9" stroke-width="12"/>
+              <circle cx="60" cy="60" r="50" fill="none"
+                :stroke="certColor"
+                stroke-width="12"
+                stroke-linecap="round"
+                stroke-dasharray="314"
+                :stroke-dashoffset="314 - (314 * totalScore / 100)"
+                transform="rotate(-90 60 60)"
+                style="transition:stroke-dashoffset 0.6s ease"/>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span class="text-2xl font-black text-slate-900" x-text="totalScore+'%'"></span>
+              <span class="text-xs font-semibold" :class="certTextColor" x-text="certLevel"></span>
+            </div>
+          </div>
+          <!-- Stats -->
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-3">
+              <h2 class="text-xl font-bold text-slate-900">Gesamtbewertung</h2>
+              <span class="text-sm px-3 py-1 rounded-full font-bold border-2"
+                :class="certBadgeStyle" x-text="certLevel + ' (' + totalScore + '%)'"></span>
+            </div>
+            <!-- Certification thresholds -->
+            <div class="flex items-center gap-5 mb-4">
+              <template x-for="lvl in certLevels" :key="lvl.name">
+                <div class="flex flex-col items-start">
+                  <div class="h-3 rounded-sm" :style="'width:'+lvl.width+'px'" :class="lvl.color"></div>
+                  <span class="text-xs mt-1 font-medium" :class="totalScore >= lvl.min ? 'text-slate-700' : 'text-slate-300'" x-text="lvl.name"></span>
+                  <span class="text-xs" :class="totalScore >= lvl.min ? 'text-slate-500' : 'text-slate-300'" x-text="'≥'+lvl.min+'%'"></span>
+                </div>
+              </template>
+            </div>
+            <!-- Quick stats -->
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div class="bg-slate-50 rounded-xl p-3">
+                <p class="text-lg font-black text-green-600">14</p>
+                <p class="text-xs text-slate-500">Kriterien ✓</p>
+              </div>
+              <div class="bg-slate-50 rounded-xl p-3">
+                <p class="text-lg font-black text-amber-500">9</p>
+                <p class="text-xs text-slate-500">In Bearb.</p>
+              </div>
+              <div class="bg-slate-50 rounded-xl p-3">
+                <p class="text-lg font-black text-slate-400">22</p>
+                <p class="text-xs text-slate-500">Offen</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Area scores -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <h3 class="font-semibold text-slate-800 mb-4 text-sm">Bewertung nach Qualitätsbereichen</h3>
+        <div class="space-y-3">
+          <template x-for="a in areas" :key="a.id">
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2 w-48 shrink-0">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" :class="a.dot"></span>
+                <span class="text-xs font-semibold text-slate-700 truncate" x-text="'Q'+a.id+' '+a.shortName"></span>
+              </div>
+              <div class="flex-1 flex items-center gap-3">
+                <div class="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all duration-700"
+                    :class="a.barColor"
+                    :style="'width:'+a.score+'%'"></div>
+                </div>
+                <div class="flex items-center gap-1 w-24 justify-end">
+                  <span class="text-sm font-bold" :class="scoreText(a.score)" x-text="a.score+'%'"></span>
+                  <span class="text-xs text-slate-400 font-medium" x-text="'(BZ: '+a.totalBZ+')'"></span>
+                </div>
+              </div>
+              <div class="w-20 text-right">
+                <span class="text-xs text-slate-400" x-text="a.id < 6 ? (a.weight*100)+'%' : 'Inform.'"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+        <!-- Q6 note -->
+        <p class="text-xs text-slate-400 mt-4 flex items-start gap-1.5">
+          <i data-lucide="info" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+          Q6 (Standortmerkmale) ist informativ und fließt nicht in den Gesamtscore ein.
+        </p>
+      </div>
+
+      <!-- Score history chart -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-slate-800 text-sm">Score-Verlauf</h3>
+          <span class="text-xs text-slate-400">
+            Klicke LP-Balken ·
+            <span class="font-semibold text-slate-600" x-text="'LP'+selectedLP+' aktiv'"></span>
+          </span>
+        </div>
+        <!-- chart area y=10–150 (140px = 100%), labels at y=168 -->
+        <svg width="100%" height="180" viewBox="0 0 500 180" preserveAspectRatio="xMidYMid meet">
+          <!-- Grid lines at 75% / 50% / 25% -->
+          <line x1="0" y1="43"  x2="470" y2="43"  stroke="#f1f5f9" stroke-width="1"/>
+          <line x1="0" y1="80"  x2="470" y2="80"  stroke="#f1f5f9" stroke-width="1"/>
+          <line x1="0" y1="117" x2="470" y2="117" stroke="#f1f5f9" stroke-width="1"/>
+          <line x1="0" y1="150" x2="470" y2="150" stroke="#e2e8f0" stroke-width="1"/>
+          <!-- Divider: totals | breakdown -->
+          <line x1="228" y1="10" x2="228" y2="155" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+          <!-- Section labels -->
+          <text x="114" y="18" text-anchor="middle" font-size="9" fill="#cbd5e1">Gesamtscore je LP</text>
+          <text x="327" y="18" text-anchor="middle" font-size="9" fill="#94a3b8"
+            x-text="'LP'+selectedLP+' · Bereiche'"></text>
+
+          <!-- ── LP1 clickable bar (14%) ── -->
+          <g @click="selectedLP=1" style="cursor:pointer">
+            <rect x="10" y="10" width="60" height="158" fill="transparent"/>
+            <rect x="20" y="130" width="40" height="20" rx="3"
+              :fill="selectedLP===1 ? '#16a34a' : '#22c55e'"
+              :opacity="selectedLP===1 ? '1' : '0.45'"/>
+            <rect x="17" y="127" width="46" height="26" rx="4" fill="none" stroke-width="2"
+              :stroke="selectedLP===1 ? '#16a34a' : 'transparent'"/>
+            <text x="40" y="125" text-anchor="middle" font-size="9"
+              :fill="selectedLP===1 ? '#16a34a' : '#94a3b8'"
+              :font-weight="selectedLP===1 ? 'bold' : 'normal'">14%</text>
+            <text x="40" y="168" text-anchor="middle" font-size="10"
+              :fill="selectedLP===1 ? '#16a34a' : '#94a3b8'"
+              :font-weight="selectedLP===1 ? 'bold' : 'normal'">LP1</text>
+          </g>
+
+          <!-- ── LP2 clickable bar (40%) ── -->
+          <g @click="selectedLP=2" style="cursor:pointer">
+            <rect x="90" y="10" width="60" height="158" fill="transparent"/>
+            <rect x="100" y="94" width="40" height="56" rx="3"
+              :fill="selectedLP===2 ? '#16a34a' : '#22c55e'"
+              :opacity="selectedLP===2 ? '1' : '0.45'"/>
+            <rect x="97" y="91" width="46" height="62" rx="4" fill="none" stroke-width="2"
+              :stroke="selectedLP===2 ? '#16a34a' : 'transparent'"/>
+            <text x="120" y="88" text-anchor="middle" font-size="9"
+              :fill="selectedLP===2 ? '#16a34a' : '#94a3b8'"
+              :font-weight="selectedLP===2 ? 'bold' : 'normal'">40%</text>
+            <text x="120" y="168" text-anchor="middle" font-size="10"
+              :fill="selectedLP===2 ? '#16a34a' : '#94a3b8'"
+              :font-weight="selectedLP===2 ? 'bold' : 'normal'">LP2</text>
+          </g>
+
+          <!-- ── LP3 clickable bar (67%, current) ── -->
+          <g @click="selectedLP=3" style="cursor:pointer">
+            <rect x="170" y="10" width="60" height="158" fill="transparent"/>
+            <rect x="180" y="56" width="40" height="94" rx="3"
+              :fill="selectedLP===3 ? '#2563eb' : '#3b82f6'"
+              :opacity="selectedLP===3 ? '1' : '0.5'"/>
+            <rect x="177" y="53" width="46" height="100" rx="4" fill="none" stroke-width="2"
+              :stroke="selectedLP===3 ? '#2563eb' : 'transparent'"/>
+            <text x="200" y="50" text-anchor="middle" font-size="9"
+              :fill="selectedLP===3 ? '#2563eb' : '#94a3b8'"
+              :font-weight="selectedLP===3 ? 'bold' : 'normal'">67%</text>
+            <text x="200" y="168" text-anchor="middle" font-size="10"
+              :fill="selectedLP===3 ? '#2563eb' : '#64748b'"
+              :font-weight="selectedLP===3 ? 'bold' : 'normal'" x-text="selectedLP===3 ? 'LP3 ●' : 'LP3'"></text>
+          </g>
+
+          <!-- ── Dynamic breakdown bars (Q1–Q5) ── -->
+          <!-- Q1 -->
+          <rect x="250"
+            :y="150 - Math.round(lpData[selectedLP][0]/100*140)"
+            :height="Math.round(lpData[selectedLP][0]/100*140)"
+            width="26" rx="2" fill="#22c55e" opacity="0.85"/>
+          <text x="263"
+            :y="Math.max(16, 150 - Math.round(lpData[selectedLP][0]/100*140) - 3)"
+            text-anchor="middle" font-size="8" fill="#16a34a"
+            x-show="lpData[selectedLP][0] > 0"
+            x-text="lpData[selectedLP][0]+'%'"></text>
+          <!-- Q2 -->
+          <rect x="282"
+            :y="150 - Math.round(lpData[selectedLP][1]/100*140)"
+            :height="Math.round(lpData[selectedLP][1]/100*140)"
+            width="26" rx="2" fill="#3b82f6" opacity="0.85"/>
+          <text x="295"
+            :y="Math.max(16, 150 - Math.round(lpData[selectedLP][1]/100*140) - 3)"
+            text-anchor="middle" font-size="8" fill="#2563eb"
+            x-show="lpData[selectedLP][1] > 0"
+            x-text="lpData[selectedLP][1]+'%'"></text>
+          <!-- Q3 -->
+          <rect x="314"
+            :y="150 - Math.round(lpData[selectedLP][2]/100*140)"
+            :height="Math.round(lpData[selectedLP][2]/100*140)"
+            width="26" rx="2" fill="#7c3aed" opacity="0.8"/>
+          <text x="327"
+            :y="Math.max(16, 150 - Math.round(lpData[selectedLP][2]/100*140) - 3)"
+            text-anchor="middle" font-size="8" fill="#7c3aed"
+            x-show="lpData[selectedLP][2] > 0"
+            x-text="lpData[selectedLP][2]+'%'"></text>
+          <!-- Q4 -->
+          <rect x="346"
+            :y="150 - Math.round(lpData[selectedLP][3]/100*140)"
+            :height="Math.round(lpData[selectedLP][3]/100*140)"
+            width="26" rx="2" fill="#f97316" opacity="0.8"/>
+          <text x="359"
+            :y="Math.max(16, 150 - Math.round(lpData[selectedLP][3]/100*140) - 3)"
+            text-anchor="middle" font-size="8" fill="#ea580c"
+            x-show="lpData[selectedLP][3] > 0"
+            x-text="lpData[selectedLP][3]+'%'"></text>
+          <!-- Q5 -->
+          <rect x="378"
+            :y="150 - Math.round(lpData[selectedLP][4]/100*140)"
+            :height="Math.round(lpData[selectedLP][4]/100*140)"
+            width="26" rx="2" fill="#0d9488" opacity="0.8"/>
+          <text x="391"
+            :y="Math.max(16, 150 - Math.round(lpData[selectedLP][4]/100*140) - 3)"
+            text-anchor="middle" font-size="8" fill="#0d9488"
+            x-show="lpData[selectedLP][4] > 0"
+            x-text="lpData[selectedLP][4]+'%'"></text>
+
+          <!-- Q area labels -->
+          <text x="263" y="168" text-anchor="middle" font-size="9" fill="#94a3b8">Q1</text>
+          <text x="295" y="168" text-anchor="middle" font-size="9" fill="#94a3b8">Q2</text>
+          <text x="327" y="168" text-anchor="middle" font-size="9" fill="#94a3b8">Q3</text>
+          <text x="359" y="168" text-anchor="middle" font-size="9" fill="#94a3b8">Q4</text>
+          <text x="391" y="168" text-anchor="middle" font-size="9" fill="#94a3b8">Q5</text>
+          <!-- Y-axis labels -->
+          <text x="492" y="46"  text-anchor="end" font-size="9" fill="#cbd5e1">75%</text>
+          <text x="492" y="83"  text-anchor="end" font-size="9" fill="#cbd5e1">50%</text>
+          <text x="492" y="120" text-anchor="end" font-size="9" fill="#cbd5e1">25%</text>
+        </svg>
+      </div>
+
+    </div><!-- end left -->
+
+    <!-- RIGHT: Export + Simulator -->
+    <div class="w-88 border-l border-slate-200 bg-white overflow-y-auto shrink-0" style="width:340px">
+      <div class="p-5 space-y-6">
+
+        <!-- EXPORT SECTION -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Berichte exportieren</h3>
+
+          <!-- LP selector for report -->
+          <div class="flex gap-1.5 mb-3 flex-wrap">
+            <template x-for="lp in [1,2,3]" :key="lp">
+              <button @click="exportLP=lp"
+                :class="exportLP===lp ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'"
+                class="px-2.5 py-1.5 border rounded-lg text-xs font-medium transition-colors"
+                x-text="'LP '+lp"></button>
+            </template>
+          </div>
+
+          <!-- PDF export -->
+          <div class="border border-slate-200 rounded-xl p-4 space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                <i data-lucide="file-text" class="w-5 h-5 text-red-500"></i>
+              </div>
+              <div class="flex-1">
+                <p class="text-sm font-semibold text-slate-800">BNB-Bericht PDF</p>
+                <p class="text-xs text-slate-500" x-text="'Leistungsphase '+exportLP+' — formaler Prüfbericht'"></p>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                <input type="checkbox" checked class="rounded"> Deckblatt + Projektdaten
+              </label>
+              <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                <input type="checkbox" checked class="rounded"> Kriterienbewertungen (alle LP)
+              </label>
+              <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                <input type="checkbox" checked class="rounded"> Score-Übersicht + Diagramme
+              </label>
+              <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                <input type="checkbox" class="rounded"> Evidenzdokument-Liste
+              </label>
+            </div>
+            <button @click="generating=true; setTimeout(()=>generating=false, 2000)"
+              class="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+              :class="generating ? 'bg-slate-100 text-slate-500 cursor-wait' : 'bg-red-500 text-white hover:bg-red-600'">
+              <template x-if="!generating">
+                <span class="flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i>PDF generieren</span>
+              </template>
+              <template x-if="generating">
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                  Generiere…
+                </span>
+              </template>
+            </button>
+          </div>
+
+          <!-- Excel export -->
+          <div class="border border-slate-200 rounded-xl p-4 space-y-3 mt-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                <i data-lucide="file-spreadsheet" class="w-5 h-5 text-emerald-600"></i>
+              </div>
+              <div class="flex-1">
+                <p class="text-sm font-semibold text-slate-800">Kriterienmatrix Excel</p>
+                <p class="text-xs text-slate-500">Vollständige Auditoren-Tabelle aller 45 Kriterien</p>
+              </div>
+            </div>
+            <button class="w-full py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2">
+              <i data-lucide="download" class="w-4 h-4"></i>Excel exportieren
+            </button>
+          </div>
+
+          <!-- Previous reports -->
+          <div class="mt-4">
+            <p class="text-xs font-semibold text-slate-500 mb-2">Letzte Exporte</p>
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-2 p-2.5 border border-slate-100 rounded-lg hover:bg-slate-50 group">
+                <i data-lucide="file-text" class="w-4 h-4 text-red-400 shrink-0"></i>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-medium text-slate-700 truncate">BNB-Bericht_LP2_2025-07-10.pdf</p>
+                  <p class="text-xs text-slate-400">10. Jul 2025</p>
+                </div>
+                <button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-green-600">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <div class="flex items-center gap-2 p-2.5 border border-slate-100 rounded-lg hover:bg-slate-50 group">
+                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-500 shrink-0"></i>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-medium text-slate-700 truncate">Kriterienmatrix_2026-04-01.xlsx</p>
+                  <p class="text-xs text-slate-400">01. Apr 2026</p>
+                </div>
+                <button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-green-600">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-200"></div>
+
+        <!-- SCORE SIMULATOR -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Score-Simulator</h3>
+            <button @click="resetSimulator()" class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+              <i data-lucide="rotate-ccw" class="w-3 h-3"></i>Reset
+            </button>
+          </div>
+          <p class="text-xs text-slate-400 mb-4">Simuliere Endergebnis bei LP8 — schiebe die Regler pro Qualitätsbereich.</p>
+
+          <!-- Area sliders -->
+          <div class="space-y-3">
+            <template x-for="a in simAreas" :key="a.id">
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <div class="flex items-center gap-1.5 text-xs">
+                    <span class="w-2 h-2 rounded-full shrink-0" :class="a.dot"></span>
+                    <span class="font-medium text-slate-700" x-text="'Q'+a.id"></span>
+                    <span class="text-slate-400 truncate max-w-28" x-text="a.shortName"></span>
+                  </div>
+                  <span class="text-xs font-bold" :class="scoreText(a.sim)" x-text="a.sim+'%'"></span>
+                </div>
+                <input type="range" min="0" max="100" step="5"
+                  x-model.number="a.sim"
+                  class="w-full h-1.5 rounded-full cursor-pointer">
+              </div>
+            </template>
+          </div>
+
+          <!-- Projected result -->
+          <div class="mt-4 p-4 rounded-xl border-2"
+            :class="simCertStyle">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs text-slate-500 font-medium">Projizierter Score LP8</p>
+                <p class="text-2xl font-black mt-0.5" :class="simCertTextColor" x-text="simTotalScore+'%'"></p>
+              </div>
+              <div class="text-right">
+                <p class="text-xs text-slate-400 mb-1">Zertifizierungsniveau</p>
+                <span class="text-sm font-bold px-3 py-1.5 rounded-lg"
+                  :class="simCertBadge" x-text="simCertLevel"></span>
+              </div>
+            </div>
+            <!-- Delta from current -->
+            <div class="mt-3 flex items-center gap-1.5 text-xs"
+              :class="simTotalScore >= totalScore ? 'text-green-600' : 'text-red-500'">
+              <i :data-lucide="simTotalScore >= totalScore ? 'trending-up' : 'trending-down'" class="w-3.5 h-3.5"></i>
+              <span x-text="(simTotalScore >= totalScore ? '+' : '') + (simTotalScore - totalScore) + '% vs. aktuell'"></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end right -->
+
+  </div><!-- end main -->
+
+</div>
+
+<!-- Mockup nav -->
+<div class="fixed bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full shadow-md px-5 py-1.5 flex items-center gap-3 z-50 text-xs">
+  <a href="06-gantt.html" class="text-slate-400 hover:text-slate-700">← Gantt</a>
+  <span class="text-slate-200">|</span>
+  <span class="text-slate-400 font-semibold">07 Berichte</span>
+  <span class="text-slate-200">|</span>
+  <a href="08-members.html" class="text-slate-400 hover:text-slate-700">Mitglieder →</a>
+</div>
+
+<script>
+function reportsApp() {
+  const areas = [
+    { id:1, shortName:'Ökologisch',       dot:'bg-green-500',  barColor:'bg-green-500',  score:68, totalBZ:15, weight:0.225 },
+    { id:2, shortName:'Ökonomisch',       dot:'bg-blue-500',   barColor:'bg-blue-500',   score:63, totalBZ:7,  weight:0.225 },
+    { id:3, shortName:'Soziokulturell',   dot:'bg-violet-500', barColor:'bg-violet-500', score:74, totalBZ:18, weight:0.225 },
+    { id:4, shortName:'Technisch',        dot:'bg-orange-400', barColor:'bg-orange-400', score:55, totalBZ:7,  weight:0.225 },
+    { id:5, shortName:'Prozess',          dot:'bg-teal-500',   barColor:'bg-teal-500',   score:80, totalBZ:8,  weight:0.1   },
+    { id:6, shortName:'Standort',         dot:'bg-rose-400',   barColor:'bg-rose-300',   score:82, totalBZ:0,  weight:0     },
+  ];
+
+  function calcTotal(arr) {
+    const w = [0.225,0.225,0.225,0.225,0.1];
+    return Math.round(arr.slice(0,5).reduce((s,a,i) => s + a*w[i], 0));
+  }
+
+  const totalScore = calcTotal(areas.map(a => a.score));
+
+  function certLevel(s) {
+    if (s >= 80) return 'Gold';
+    if (s >= 65) return 'Silber';
+    if (s >= 50) return 'Bronze';
+    return 'Kein Zertifikat';
+  }
+  function certColor(s) {
+    if (s >= 80) return '#eab308';
+    if (s >= 65) return '#94a3b8';
+    if (s >= 50) return '#d97706';
+    return '#ef4444';
+  }
+  function certBadgeStyle(s) {
+    if (s >= 95) return 'border-cyan-400 bg-cyan-50 text-cyan-700';
+    if (s >= 80) return 'border-yellow-400 bg-yellow-50 text-yellow-700';
+    if (s >= 65) return 'border-slate-400 bg-slate-50 text-slate-600';
+    if (s >= 50) return 'border-amber-500 bg-amber-50 text-amber-700';
+    return 'border-red-400 bg-red-50 text-red-600';
+  }
+
+  return {
+    areas,
+    totalScore,
+    exportLP: 3,
+    generating: false,
+
+    get certLevel()    { return certLevel(this.totalScore); },
+    get certColor()    { return certColor(this.totalScore); },
+    get certTextColor(){ const s=this.totalScore; return s>=80?'text-yellow-600':s>=65?'text-slate-500':s>=50?'text-amber-600':'text-red-500'; },
+    get certBadgeStyle(){ return certBadgeStyle(this.totalScore); },
+
+    certLevels: [
+      { name:'Bronze', min:50, width:30,  color:'bg-amber-400' },
+      { name:'Silber', min:65, width:25,  color:'bg-slate-400' },
+      { name:'Gold',   min:80, width:45,  color:'bg-yellow-400' },
+    ],
+
+    scoreText(v) {
+      return v >= 80 ? 'text-green-600' : v >= 50 ? 'text-amber-500' : 'text-red-400';
+    },
+
+    // Simulator
+    simAreas: areas.slice(0,5).map(a => ({ ...a, sim: Math.min(100, a.score + 10) })),
+
+    get simTotalScore() { return calcTotal(this.simAreas.map(a => a.sim)); },
+    get simCertLevel()  { return certLevel(this.simTotalScore); },
+    get simCertStyle() {
+      const s = this.simTotalScore;
+      return s>=80?'border-yellow-300 bg-yellow-50':s>=65?'border-slate-300 bg-slate-50':s>=50?'border-amber-300 bg-amber-50':'border-red-300 bg-red-50';
+    },
+    get simCertTextColor() { return this.scoreText(this.simTotalScore); },
+    get simCertBadge() { return certBadgeStyle(this.simTotalScore); },
+
+    resetSimulator() {
+      this.simAreas = areas.slice(0,5).map(a => ({ ...a, sim: a.score }));
+    },
+
+    // Interactive LP chart
+    selectedLP: 3,
+    lpData: {
+      1: [20,  0, 25,  0, 40],
+      2: [45, 35, 50, 20, 60],
+      3: [68, 63, 74, 55, 80],
+    },
+  };
+}
+
+document.addEventListener('alpine:initialized', () => lucide.createIcons());
+</script>
+</body>
+</html>

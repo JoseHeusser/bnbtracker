@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNBtracker — Mitglieder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    input[type=checkbox] { accent-color: #16a34a; }
+  </style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+
+<!--
+  DECISIONES DE DISEÑO (08-members.html):
+  - Lista de miembros del proyecto con: avatar, nombre, email, rol, criterios asignados, fecha de ingreso
+  - Roles: coordinator (all access), specialist (solo criterios en criteria_scope), client (read-only)
+  - Especialistas: selector de áreas/criterios específicos a los que tienen acceso
+  - Invitar: modal con email + rol + scope opcional → envía email via Resend/FastAPI
+  - Remover miembro: confirmación
+  - Estado invite: pendiente (no ha aceptado) / activo
+  - Next.js: app/[locale]/(dashboard)/projects/[id]/members/page.tsx
+  - project_members tabla: user_id + role + criteria_scope[] + invited_at + accepted_at
+  - RLS: solo coordinadores pueden invitar/remover; specialists no ven esta página
+-->
+
+<div x-data="membersApp()" class="flex flex-col h-screen">
+
+  <!-- HEADER -->
+  <header class="h-12 bg-white border-b border-slate-200 flex items-center px-5 gap-3 shrink-0 z-20">
+    <a href="02-dashboard.html" class="flex items-center gap-2 shrink-0">
+      <div class="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+        <span class="text-white font-bold text-xs">BNB</span>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">BNBtracker</span>
+    </a>
+    <span class="text-slate-300">/</span>
+    <a href="02-dashboard.html" class="text-slate-500 text-sm hover:text-slate-700">Projekte</a>
+    <span class="text-slate-300">/</span>
+    <a href="03-project-overview.html" class="text-slate-500 text-sm hover:text-slate-700 truncate max-w-36">Bundesministerium Berlin</a>
+    <span class="text-slate-300">/</span>
+    <span class="text-slate-700 text-sm font-medium">Mitglieder</span>
+    <div class="ml-auto flex items-center gap-3">
+      <button class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+        <i data-lucide="bell" class="w-4 h-4"></i>
+      </button>
+      <div class="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-semibold">JM</div>
+    </div>
+  </header>
+
+  <!-- PROJECT NAV TABS -->
+  <div class="bg-white border-b border-slate-200 px-4 flex items-center gap-0.5 shrink-0">
+    <a href="03-project-overview.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>Übersicht
+    </a>
+    <a href="04-criteria-matrix.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="table-2" class="w-3.5 h-3.5"></i>Kriterien
+    </a>
+    <a href="06-gantt.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="gantt-chart" class="w-3.5 h-3.5"></i>Gantt
+    </a>
+    <a href="07-reports.html" class="px-3 py-2.5 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+      <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>Berichte
+    </a>
+    <a href="#" class="px-3 py-2.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 flex items-center gap-1.5">
+      <i data-lucide="users" class="w-3.5 h-3.5"></i>Mitglieder
+    </a>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="flex-1 overflow-y-auto p-6">
+    <div class="max-w-4xl mx-auto space-y-6">
+
+      <!-- Page header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-lg font-bold text-slate-900">Projektmitglieder</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Verwalte Zugriff und Verantwortlichkeiten für dieses Projekt</p>
+        </div>
+        <button @click="showInviteModal=true"
+          class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+          <i data-lucide="user-plus" class="w-4 h-4"></i>Mitglied einladen
+        </button>
+      </div>
+
+      <!-- Role legend -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+            <i data-lucide="shield-check" class="w-4 h-4 text-green-600"></i>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-800">Koordinator</p>
+            <p class="text-xs text-slate-400 mt-0.5">Vollzugriff: alle Kriterien, Berichte, Mitglieder</p>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+            <i data-lucide="pencil" class="w-4 h-4 text-violet-600"></i>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-800">Spezialist</p>
+            <p class="text-xs text-slate-400 mt-0.5">Schreibzugriff nur auf zugewiesene Kriterien</p>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+            <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-800">Auftraggeber</p>
+            <p class="text-xs text-slate-400 mt-0.5">Nur Lesezugriff: Score-Dashboard, keine internen Kommentare</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Members list -->
+      <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center">
+          <span class="text-xs font-semibold text-slate-500 flex-1">Mitglied</span>
+          <span class="text-xs font-semibold text-slate-500 w-32">Rolle</span>
+          <span class="text-xs font-semibold text-slate-500 w-40 hidden md:block">Kriterien-Zugriff</span>
+          <span class="text-xs font-semibold text-slate-500 w-28 hidden lg:block">Status</span>
+          <span class="text-xs font-semibold text-slate-500 w-24 text-right">Aktionen</span>
+        </div>
+        <template x-for="m in members" :key="m.id">
+          <div class="flex items-center px-5 py-4 border-b border-slate-100 hover:bg-slate-50 transition-colors">
+            <!-- Avatar + name -->
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+              <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                :class="avatarColor(m.initials)">
+                <span x-text="m.initials"></span>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="text-sm font-semibold text-slate-900 truncate" x-text="m.name"></p>
+                  <span x-show="m.id === 'jm'" class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Ich</span>
+                </div>
+                <p class="text-xs text-slate-400 truncate" x-text="m.email"></p>
+              </div>
+            </div>
+            <!-- Role -->
+            <div class="w-32 shrink-0">
+              <span class="text-xs px-2.5 py-1 rounded-full font-semibold" :class="roleBadge(m.role)" x-text="roleLabel(m.role)"></span>
+            </div>
+            <!-- Criteria scope -->
+            <div class="w-40 hidden md:flex items-center gap-1 flex-wrap shrink-0">
+              <template x-if="m.role === 'coordinator'">
+                <span class="text-xs text-slate-500">Alle Kriterien</span>
+              </template>
+              <template x-if="m.role === 'client'">
+                <span class="text-xs text-slate-400">Nur Dashboard</span>
+              </template>
+              <template x-if="m.role === 'specialist'">
+                <div class="flex flex-wrap gap-1">
+                  <template x-for="a in m.areas" :key="a">
+                    <span class="text-xs px-1.5 py-0.5 rounded font-medium" :class="areaBadge(a)" x-text="'Q'+a"></span>
+                  </template>
+                </div>
+              </template>
+            </div>
+            <!-- Status -->
+            <div class="w-28 hidden lg:block shrink-0">
+              <template x-if="m.accepted">
+                <span class="flex items-center gap-1 text-xs text-green-600 font-medium">
+                  <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block"></span>Aktiv seit <span x-text="m.joinedDate"></span>
+                </span>
+              </template>
+              <template x-if="!m.accepted">
+                <span class="flex items-center gap-1 text-xs text-amber-500 font-medium">
+                  <span class="w-1.5 h-1.5 bg-amber-400 rounded-full inline-block"></span>Einladung ausstehend
+                </span>
+              </template>
+            </div>
+            <!-- Actions -->
+            <div class="w-24 flex items-center justify-end gap-1 shrink-0">
+              <button @click="openEditMember(m)"
+                class="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Bearbeiten">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </button>
+              <template x-if="m.id !== 'jm'">
+                <button @click="confirmRemove(m)"
+                  class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Entfernen">
+                  <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+                </button>
+              </template>
+              <template x-if="!m.accepted">
+                <button class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Einladung erneut senden">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                </button>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Access audit note -->
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+        <i data-lucide="shield" class="w-5 h-5 text-blue-500 shrink-0 mt-0.5"></i>
+        <div>
+          <p class="text-sm font-semibold text-blue-800">Row-Level Security aktiv</p>
+          <p class="text-xs text-blue-600 mt-0.5">Spezialisten sehen nur ihre zugewiesenen Kriterien. Auftraggeber sehen keine internen Kommentare. Zugriff wird serverseitig via Supabase RLS durchgesetzt.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- INVITE MODAL -->
+  <div x-show="showInviteModal" x-cloak
+    class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+    @click.self="showInviteModal=false">
+    <div x-show="showInviteModal" x-transition
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <h2 class="font-semibold text-slate-900 flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-5 h-5 text-green-600"></i>Mitglied einladen
+        </h2>
+        <button @click="showInviteModal=false" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">E-Mail-Adresse <span class="text-red-400">*</span></label>
+          <input type="email" x-model="invite.email" placeholder="mitglied@firma.de"
+            class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">Rolle <span class="text-red-400">*</span></label>
+          <div class="grid grid-cols-3 gap-2">
+            <template x-for="r in roles" :key="r.value">
+              <label class="border rounded-xl p-3 cursor-pointer transition-all"
+                :class="invite.role===r.value ? 'border-green-400 bg-green-50' : 'border-slate-200 hover:bg-slate-50'">
+                <input type="radio" :value="r.value" x-model="invite.role" class="sr-only">
+                <div class="flex flex-col items-center gap-1.5 text-center">
+                  <i :data-lucide="r.icon" class="w-5 h-5" :class="invite.role===r.value ? r.activeColor : 'text-slate-400'"></i>
+                  <span class="text-xs font-semibold" :class="invite.role===r.value ? 'text-green-700' : 'text-slate-600'" x-text="r.label"></span>
+                  <span class="text-xs text-slate-400" x-text="r.desc"></span>
+                </div>
+              </label>
+            </template>
+          </div>
+        </div>
+
+        <!-- Criteria scope (only for specialist) -->
+        <div x-show="invite.role==='specialist'" x-transition>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">Kriterien-Zugriff</label>
+          <p class="text-xs text-slate-400 mb-2.5">Wähle die Qualitätsbereiche oder lasse leer für alle Kriterien.</p>
+          <div class="grid grid-cols-3 gap-2">
+            <template x-for="a in areaOptions" :key="a.id">
+              <label class="flex items-center gap-2 border rounded-lg p-2.5 cursor-pointer transition-all"
+                :class="invite.areas.includes(a.id) ? 'border-green-300 bg-green-50' : 'border-slate-200 hover:bg-slate-50'">
+                <input type="checkbox" :value="a.id"
+                  :checked="invite.areas.includes(a.id)"
+                  @change="toggleArea(a.id)" class="w-4 h-4">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full shrink-0" :class="a.dot"></span>
+                  <span class="text-xs font-semibold text-slate-700" x-text="'Q'+a.id"></span>
+                </div>
+              </label>
+            </template>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Persönliche Nachricht (optional)</label>
+          <textarea rows="2" placeholder="Nachricht an den eingeladenen Nutzer…"
+            class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 resize-none placeholder:text-slate-300"></textarea>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <p class="text-xs text-slate-400 flex items-center gap-1.5">
+          <i data-lucide="mail" class="w-3.5 h-3.5"></i>Einladungs-E-Mail wird automatisch verschickt
+        </p>
+        <div class="flex gap-2">
+          <button @click="showInviteModal=false" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-white">Abbrechen</button>
+          <button @click="sendInvite()"
+            class="px-4 py-2 text-sm bg-green-600 text-white rounded-xl hover:bg-green-700 font-semibold flex items-center gap-1.5">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>Einladen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT MEMBER MODAL -->
+  <div x-show="showEditModal" x-cloak
+    class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+    @click.self="showEditModal=false">
+    <div x-show="showEditModal" x-transition
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h2 class="font-semibold text-slate-900" x-text="editMember ? editMember.name : ''"></h2>
+        <button @click="showEditModal=false" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">Rolle</label>
+          <select class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 bg-white"
+            x-model="editMember && editMember.role">
+            <option value="coordinator">Koordinator</option>
+            <option value="specialist">Spezialist</option>
+            <option value="client">Auftraggeber</option>
+          </select>
+        </div>
+        <template x-if="editMember && editMember.role === 'specialist'">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-2">Kriterien-Zugriff</label>
+            <div class="grid grid-cols-3 gap-2">
+              <template x-for="a in areaOptions" :key="a.id">
+                <label class="flex items-center gap-2 border rounded-lg p-2.5 cursor-pointer"
+                  :class="editMember.areas && editMember.areas.includes(a.id) ? 'border-green-300 bg-green-50' : 'border-slate-200'">
+                  <input type="checkbox" :value="a.id"
+                    :checked="editMember.areas && editMember.areas.includes(a.id)"
+                    class="w-4 h-4">
+                  <span class="text-xs font-semibold" x-text="'Q'+a.id"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+        <button @click="showEditModal=false" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Abbrechen</button>
+        <button @click="showEditModal=false" class="px-4 py-2 text-sm bg-green-600 text-white rounded-xl hover:bg-green-700 font-semibold">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Mockup nav -->
+<div class="fixed bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full shadow-md px-5 py-1.5 flex items-center gap-3 z-50 text-xs">
+  <a href="07-reports.html" class="text-slate-400 hover:text-slate-700">← Berichte</a>
+  <span class="text-slate-200">|</span>
+  <span class="text-slate-400 font-semibold">08 Mitglieder</span>
+  <span class="text-slate-200">|</span>
+  <a href="09-admin.html" class="text-slate-400 hover:text-slate-700">Admin →</a>
+</div>
+
+<script>
+function membersApp() {
+  return {
+    showInviteModal: false,
+    showEditModal: false,
+    editMember: null,
+
+    members: [
+      { id:'jm', initials:'JM', name:'Julia Müller',    email:'julia.mueller@bnbconsult.de',  role:'coordinator', areas:[], accepted:true,  joinedDate:'Mär 2025' },
+      { id:'kl', initials:'KL', name:'Klaus Lang',      email:'k.lang@energieplan.de',        role:'coordinator', areas:[], accepted:true,  joinedDate:'Mär 2025' },
+      { id:'am', initials:'AM', name:'Anna Müller',     email:'a.mueller@lca-studio.de',      role:'specialist',  areas:[1,5], accepted:true,  joinedDate:'Apr 2025' },
+      { id:'tm', initials:'TM', name:'Thomas Mayer',    email:'t.mayer@akustik-plus.de',      role:'specialist',  areas:[3,4], accepted:true,  joinedDate:'Mai 2025' },
+      { id:'sb', initials:'SB', name:'Sarah Becker',    email:'s.becker@bundesbau.de',        role:'client',      areas:[], accepted:true,  joinedDate:'Jun 2025' },
+      { id:'rh', initials:'RH', name:'Ralf Hoffmann',   email:'r.hoffmann@bundesbau.de',      role:'specialist',  areas:[2], accepted:false, joinedDate:'' },
+    ],
+
+    invite: { email:'', role:'specialist', areas:[] },
+
+    roles: [
+      { value:'coordinator', label:'Koordinator', icon:'shield-check', desc:'Vollzugriff', activeColor:'text-green-600' },
+      { value:'specialist',  label:'Spezialist',  icon:'pencil',       desc:'Zugewiesene Kriterien', activeColor:'text-violet-600' },
+      { value:'client',      label:'Auftraggeber',icon:'eye',          desc:'Nur lesen', activeColor:'text-blue-600' },
+    ],
+
+    areaOptions: [
+      { id:1, dot:'bg-green-500',  name:'Ökologisch' },
+      { id:2, dot:'bg-blue-500',   name:'Ökonomisch' },
+      { id:3, dot:'bg-violet-500', name:'Soziokulturell' },
+      { id:4, dot:'bg-orange-400', name:'Technisch' },
+      { id:5, dot:'bg-teal-500',   name:'Prozess' },
+      { id:6, dot:'bg-rose-400',   name:'Standort' },
+    ],
+
+    toggleArea(id) {
+      const idx = this.invite.areas.indexOf(id);
+      if (idx === -1) this.invite.areas.push(id);
+      else this.invite.areas.splice(idx, 1);
+    },
+
+    openEditMember(m) {
+      this.editMember = { ...m };
+      this.showEditModal = true;
+      this.$nextTick(() => lucide.createIcons());
+    },
+
+    confirmRemove(m) {
+      if (confirm(`${m.name} aus dem Projekt entfernen?`)) {
+        this.members = this.members.filter(x => x.id !== m.id);
+      }
+    },
+
+    sendInvite() {
+      if (!this.invite.email) return;
+      const initials = this.invite.email.slice(0,2).toUpperCase();
+      this.members.push({
+        id: Date.now().toString(),
+        initials,
+        name: this.invite.email.split('@')[0],
+        email: this.invite.email,
+        role: this.invite.role,
+        areas: [...this.invite.areas],
+        accepted: false,
+        joinedDate: '',
+      });
+      this.invite = { email:'', role:'specialist', areas:[] };
+      this.showInviteModal = false;
+    },
+
+    roleBadge(r) {
+      return { coordinator:'bg-green-100 text-green-700', specialist:'bg-violet-100 text-violet-700', client:'bg-blue-100 text-blue-700' }[r];
+    },
+    roleLabel(r) {
+      return { coordinator:'Koordinator', specialist:'Spezialist', client:'Auftraggeber' }[r];
+    },
+    areaBadge(id) {
+      return ['','bg-green-100 text-green-700','bg-blue-100 text-blue-700','bg-violet-100 text-violet-700','bg-orange-100 text-orange-700','bg-teal-100 text-teal-700','bg-rose-100 text-rose-600'][id];
+    },
+    avatarColor(initials) {
+      const colors = ['bg-green-600','bg-blue-500','bg-violet-500','bg-orange-400','bg-teal-500','bg-rose-500','bg-indigo-500','bg-amber-500'];
+      let h = 0;
+      for (let i=0;i<initials.length;i++) h = initials.charCodeAt(i) + ((h<<5)-h);
+      return colors[Math.abs(h) % colors.length];
+    },
+  };
+}
+
+document.addEventListener('alpine:initialized', () => lucide.createIcons());
+</script>
+</body>
+</html>
